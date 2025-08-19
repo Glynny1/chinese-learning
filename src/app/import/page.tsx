@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
+const OWNER_USER_ID = process.env.NEXT_PUBLIC_OWNER_USER_ID || "";
+
 type Row = { hanzi: string; pinyin: string; english: string; description?: string; categoryName?: string };
 type Category = { id: string; name: string };
 
@@ -20,14 +22,19 @@ export default function ImportPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     supabase.auth.getSession().then(({ data }) => {
       setAccessToken(data.session?.access_token ?? null);
+      const uid = data.session?.user?.id ?? "";
+      setIsOwner(Boolean(OWNER_USER_ID && uid === OWNER_USER_ID));
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAccessToken(session?.access_token ?? null);
+      const uid = session?.user?.id ?? "";
+      setIsOwner(Boolean(OWNER_USER_ID && uid === OWNER_USER_ID));
     });
     return () => { sub.subscription.unsubscribe(); };
   }, []);
@@ -45,8 +52,8 @@ export default function ImportPage() {
         }
       } catch {}
     }
-    if (accessToken) loadCategories();
-  }, [accessToken]);
+    if (accessToken && isOwner) loadCategories();
+  }, [accessToken, isOwner]);
 
   async function ensureCategoryByName(name: string): Promise<string | null> {
     const clean = name.trim();
@@ -226,6 +233,10 @@ export default function ImportPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!isOwner) {
+    return <div className="max-w-2xl mx-auto w-full"><h1 className="text-2xl font-semibold mb-4">Bulk Import</h1><div className="opacity-70">Admins only.</div></div>;
   }
 
   return (

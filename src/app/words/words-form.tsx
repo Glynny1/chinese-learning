@@ -7,15 +7,18 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const OWNER_USER_ID = process.env.NEXT_PUBLIC_OWNER_USER_ID || process.env.OWNER_USER_ID || "";
 
 type Category = { id: string; name: string };
+type Lesson = { id: string; name: string };
 
 export function WordsForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ hanzi: "", pinyin: "", english: "", description: "", categoryId: "" });
+  const [form, setForm] = useState({ hanzi: "", pinyin: "", english: "", description: "", categoryId: "", lessonId: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newLessonName, setNewLessonName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -34,19 +37,17 @@ export function WordsForm() {
   }, []);
 
   useEffect(() => {
-    async function loadCategories() {
+    async function load() {
       try {
-        const res = await fetch("/api/categories", {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-          credentials: "include",
-        });
-        if (res.ok) {
-          const j = await res.json();
-          setCategories(j.categories || []);
-        }
+        const [cr, lr] = await Promise.all([
+          fetch("/api/categories", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
+          fetch("/api/lessons", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
+        ]);
+        if (cr.ok) { const j = await cr.json(); setCategories(j.categories || []); }
+        if (lr.ok) { const j = await lr.json(); setLessons(j.lessons || []); }
       } catch {}
     }
-    loadCategories();
+    load();
   }, [accessToken]);
 
   async function ensureCategory(): Promise<string | null> {
@@ -54,10 +55,7 @@ export function WordsForm() {
     if (!name) return form.categoryId || null;
     const res = await fetch("/api/categories", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
+      headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: JSON.stringify({ name }),
       credentials: "include",
     });
@@ -71,27 +69,45 @@ export function WordsForm() {
     return null;
   }
 
+  async function ensureLesson(): Promise<string | null> {
+    const name = newLessonName.trim();
+    if (!name) return form.lessonId || null;
+    const res = await fetch("/api/lessons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: JSON.stringify({ name }),
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j?.id && j?.name) {
+      setLessons((prev) => [{ id: j.id, name: j.name }, ...prev.filter((c) => c.id !== j.id)]);
+      setNewLessonName("");
+      return j.id as string;
+    }
+    return null;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       let category_id: string | null = form.categoryId || null;
-      if (!category_id && newCategoryName.trim()) {
-        category_id = await ensureCategory();
-      }
+      if (!category_id && newCategoryName.trim()) category_id = await ensureCategory();
+      let lesson_id: string | null = form.lessonId || null;
+      if (!lesson_id && newLessonName.trim()) lesson_id = await ensureLesson();
+
       const res = await fetch("/api/words", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
         body: JSON.stringify({
           hanzi: form.hanzi,
           pinyin: form.pinyin,
           english: form.english,
           description: form.description,
-          category_id: category_id,
+          category_id,
+          lesson_id,
         }),
         credentials: "include",
       });
@@ -99,8 +115,9 @@ export function WordsForm() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `Request failed: ${res.status}`);
       }
-      setForm({ hanzi: "", pinyin: "", english: "", description: "", categoryId: "" });
+      setForm({ hanzi: "", pinyin: "", english: "", description: "", categoryId: "", lessonId: "" });
       setNewCategoryName("");
+      setNewLessonName("");
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add word";
@@ -126,22 +143,24 @@ export function WordsForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm mb-1">Select Category</label>
-          <select
-            className="border rounded p-2 w-full"
-            value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-          >
+          <select className="border rounded p-2 w-full" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
             <option value="">None</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
+          <div className="mt-2 flex gap-2">
+            <input className="border rounded p-2 flex-1" placeholder="New Category" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+            <button className="px-3 py-2 rounded border" type="button" onClick={async () => { const id = await ensureCategory(); if (id) setForm((f) => ({ ...f, categoryId: id })); }} disabled={!newCategoryName.trim() || loading}>Add</button>
+          </div>
         </div>
         <div>
-          <label className="block text-sm mb-1">Or Create New Category</label>
-          <div className="flex gap-2">
-            <input className="border rounded p-2 flex-1" placeholder="e.g., Greeting" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-            <button className="px-3 py-2 rounded border" type="button" onClick={async () => { const id = await ensureCategory(); if (id) setForm((f) => ({ ...f, categoryId: id })); }} disabled={!newCategoryName.trim() || loading}>Add</button>
+          <label className="block text-sm mb-1">Select Lesson</label>
+          <select className="border rounded p-2 w-full" value={form.lessonId} onChange={(e) => setForm({ ...form, lessonId: e.target.value })}>
+            <option value="">None</option>
+            {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
+          </select>
+          <div className="mt-2 flex gap-2">
+            <input className="border rounded p-2 flex-1" placeholder="New Lesson" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} />
+            <button className="px-3 py-2 rounded border" type="button" onClick={async () => { const id = await ensureLesson(); if (id) setForm((f) => ({ ...f, lessonId: id })); }} disabled={!newLessonName.trim() || loading}>Add</button>
           </div>
         </div>
       </div>
