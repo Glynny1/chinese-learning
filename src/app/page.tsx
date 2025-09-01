@@ -10,7 +10,6 @@ export default async function Home() {
       <p className="opacity-80">Build your Chinese vocabulary and practice with flashcards.</p>
       <div className="mt-6 grid grid-cols-1 gap-3">
         <Link href="/words" className="border rounded p-4 hover:bg-black/5">View words</Link>
-        <Link href="/categories" className="border rounded p-4 hover:bg-black/5">Manage categories</Link>
         <Link href="/flashcards" className="border rounded p-4 hover:bg-black/5">Start flashcards</Link>
         <HomeAdminLink />
       </div>

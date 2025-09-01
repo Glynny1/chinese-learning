@@ -31,7 +31,6 @@ export default function NavBarClient() {
       <div className="flex gap-4 items-center">
         <Link href="/" className="font-semibold">Chinese Learning</Link>
         <Link href="/words" className="hover:underline">Words</Link>
-        <Link href="/categories" className="hover:underline">Categories</Link>
         <Link href="/flashcards" className="hover:underline">Flashcards</Link>
         {isOwner ? <Link href="/import" className="hover:underline">Import</Link> : null}
       </div>

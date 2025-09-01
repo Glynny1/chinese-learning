@@ -21,16 +21,13 @@ export default function FlashcardsFetch() {
     let isMounted = true;
     async function load() {
       try {
-        const [wr, cr, lr] = await Promise.all([
+        const [wr, lr] = await Promise.all([
           fetch("/api/words", { cache: "no-store" }),
-          fetch("/api/categories", { cache: "no-store" }),
           fetch("/api/lessons", { cache: "no-store" }),
         ]);
         if (!wr.ok) throw new Error(`Words failed: ${wr.status}`);
-        if (!cr.ok) throw new Error(`Categories failed: ${cr.status}`);
         // lessons may be empty; don't throw on lr failure, just derive from words
         const jw: { words?: Array<Word> } = await wr.json();
-        const jc: { categories?: Array<Category> } = await cr.json();
         let jl: { lessons?: Array<Lesson> } = { lessons: [] };
         try { if (lr.ok) jl = await lr.json(); } catch {}
 
@@ -41,7 +38,14 @@ export default function FlashcardsFetch() {
             category: Array.isArray(w.category) ? (w.category[0] ?? null) : (w.category ?? null),
           }));
           setWords(ws);
-          setCategories(jc.categories ?? []);
+          // Derive categories from words since categories page is removed
+          const cats = new Map<string, Category>();
+          for (const w of ws) {
+            const cid = (Array.isArray(w.category) ? w.category[0]?.id : w.category?.id) as string | undefined;
+            const cname = (Array.isArray(w.category) ? w.category[0]?.name : w.category?.name) as string | undefined;
+            if (cid) cats.set(cid, { id: cid, name: cname || "Category" });
+          }
+          setCategories(Array.from(cats.values()));
           setLessons(jl.lessons ?? []);
         }
       } catch (e) {
