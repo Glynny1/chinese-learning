@@ -63,7 +63,6 @@ function scheduleNext(current: CardState | undefined, grade: Grade): CardState {
   let { repetitions, ease, interval } = base;
 
   if (grade === 0) {
-    // Again: quick relearn
     repetitions = 0;
     ease = Math.max(MIN_EASE, ease - 0.2);
     interval = 0;
@@ -72,14 +71,12 @@ function scheduleNext(current: CardState | undefined, grade: Grade): CardState {
   }
 
   if (grade === 1) {
-    // Hard: small penalty, short interval
     ease = Math.max(MIN_EASE, ease - 0.15);
     interval = repetitions <= 1 ? 1 : Math.max(1, Math.round(interval * 1.2));
     const due = new Date(now.getTime() + interval * 24 * 60 * 60_000);
     return { repetitions, ease, interval, dueAt: due.toISOString(), lastGrade: grade };
   }
 
-  // Good/Easy
   const isFirst = repetitions === 0;
   const isSecond = repetitions === 1;
 
@@ -90,7 +87,6 @@ function scheduleNext(current: CardState | undefined, grade: Grade): CardState {
     else interval = Math.max(1, Math.round(interval * ease));
     repetitions = repetitions + 1;
   } else {
-    // Easy
     ease = Math.min(MAX_EASE, ease + 0.15);
     if (isFirst) interval = 2;
     else if (isSecond) interval = 7;
@@ -113,12 +109,10 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
   const [reviewed, setReviewed] = useState(0);
   const [correct, setCorrect] = useState(0);
 
-  // Load SRS store once
   useEffect(() => {
     setStore(loadStore());
   }, []);
 
-  // Build queue: due first, then new (respect daily cap). Shuffle within groups.
   const queue: Word[] = useMemo(() => {
     if (!words || words.length === 0) return [];
     const due: Word[] = [];
@@ -128,7 +122,6 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
       if (!st) fresh.push(w);
       else if (isDue(st)) due.push(w);
     }
-    // Shuffle helper
     const shuffle = <T,>(arr: T[]): T[] => {
       const a = [...arr];
       for (let i = a.length - 1; i > 0; i--) {
@@ -142,20 +135,21 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     return [...shuffle(due), ...freshCapped];
   }, [words, store]);
 
-  // When the queue rebuilds, pick a random start
+  // If no due/new, fall back to practicing the whole filtered set so it never goes blank
+  const effectiveQueue = queue.length > 0 ? queue : words;
+
   useEffect(() => {
-    if (queue.length > 0) {
-      setIndex(Math.floor(Math.random() * queue.length));
+    if (effectiveQueue.length > 0) {
+      setIndex(Math.floor(Math.random() * effectiveQueue.length));
       setShowAnswer(false);
     } else {
       setIndex(0);
       setShowAnswer(false);
     }
-  }, [queue.length]);
+  }, [effectiveQueue.length]);
 
-  const current: Word | null = queue[index] ?? null;
+  const current: Word | null = effectiveQueue[index] ?? null;
 
-  // Keyboard shortcuts 1..4
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "1") gradeCurrent(0);
@@ -166,7 +160,7 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queue, index, store]);
+  }, [effectiveQueue, index, store]);
 
   function gradeCurrent(grade: Grade) {
     if (!current) return;
@@ -174,7 +168,6 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     const curState = prev.perCard[current.id];
     const nextState = scheduleNext(curState, grade);
 
-    // Track daily new introductions
     if (!curState) {
       const t = todayKey();
       if (prev.daily.date !== t) prev.daily = { date: t, newIntroduced: 0 };
@@ -188,12 +181,11 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     setReviewed((r) => r + 1);
     if (grade >= 2) setCorrect((c) => c + 1);
 
-    // Advance to next card within the new queue
-    if (queue.length <= 1) {
+    if (effectiveQueue.length <= 1) {
       setIndex(0);
       setShowAnswer(false);
     } else {
-      setIndex((i) => (i + 1) % queue.length);
+      setIndex((i) => (i + 1) % effectiveQueue.length);
       setShowAnswer(false);
     }
   }
@@ -239,7 +231,7 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
       </div>
 
       <div className="flex items-center justify-between text-sm opacity-70">
-        <div>Card {queue.length ? index + 1 : 0} / {queue.length}</div>
+        <div>Card {effectiveQueue.length ? index + 1 : 0} / {effectiveQueue.length}</div>
         <div>Shortcuts: 1–4</div>
       </div>
     </div>

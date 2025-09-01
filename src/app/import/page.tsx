@@ -1,27 +1,32 @@
 "use client";
 
 import Papa, { ParseResult } from "papaparse";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const OWNER_USER_ID = process.env.NEXT_PUBLIC_OWNER_USER_ID || "";
 
-type Row = { hanzi: string; pinyin: string; english: string; description?: string; categoryName?: string };
+type Row = { hanzi: string; pinyin: string; english: string; description?: string; categoryName?: string; lessonName?: string };
 type Category = { id: string; name: string };
+type Lesson = { id: string; name: string };
 
 export default function ImportPage() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState<number | null>(null);
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [categoryId, setCategoryId] = useState<string>("");
+  const [lessonId, setLessonId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newLessonName, setNewLessonName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -40,19 +45,17 @@ export default function ImportPage() {
   }, []);
 
   useEffect(() => {
-    async function loadCategories() {
+    async function loadMeta() {
       try {
-        const res = await fetch("/api/categories", {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-          credentials: "include",
-        });
-        if (res.ok) {
-          const j = await res.json();
-          setCategories(j.categories || []);
-        }
+        const [cr, lr] = await Promise.all([
+          fetch("/api/categories", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
+          fetch("/api/lessons", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
+        ]);
+        if (cr.ok) { const j = await cr.json(); setCategories(j.categories || []); }
+        if (lr.ok) { const j = await lr.json(); setLessons(j.lessons || []); }
       } catch {}
     }
-    if (accessToken && isOwner) loadCategories();
+    if (accessToken && isOwner) loadMeta();
   }, [accessToken, isOwner]);
 
   async function ensureCategoryByName(name: string): Promise<string | null> {
@@ -76,6 +79,27 @@ export default function ImportPage() {
     return null;
   }
 
+  async function ensureLessonByName(name: string): Promise<string | null> {
+    const clean = name.trim();
+    if (!clean) return null;
+    const res = await fetch("/api/lessons", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({ name: clean }),
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j?.id && j?.name) {
+      setLessons((prev) => [{ id: j.id, name: j.name }, ...prev.filter((c) => c.id !== j.id)]);
+      return j.id as string;
+    }
+    return null;
+  }
+
   async function ensureCategory(): Promise<string | null> {
     if (!newCategoryName.trim()) return categoryId || null;
     const id = await ensureCategoryByName(newCategoryName);
@@ -86,26 +110,48 @@ export default function ImportPage() {
     return id;
   }
 
+  async function ensureLesson(): Promise<string | null> {
+    if (!newLessonName.trim()) return lessonId || null;
+    const id = await ensureLessonByName(newLessonName);
+    if (id) {
+      setNewLessonName("");
+      setLessonId(id);
+    }
+    return id;
+  }
+
   async function importRows(rows: Array<Row>) {
     let count = 0;
 
-    // Resolve default category once (if any)
     let defaultCategoryId: string | null = categoryId || null;
     if (!defaultCategoryId && newCategoryName.trim()) {
       defaultCategoryId = await ensureCategory();
     }
 
-    // Prepare unique per-row category names to upsert
-    const uniqueNames = new Set<string>();
-    for (const r of rows) {
-      const name = (r.categoryName || "").trim();
-      if (name) uniqueNames.add(name);
+    let defaultLessonId: string | null = lessonId || null;
+    if (!defaultLessonId && newLessonName.trim()) {
+      defaultLessonId = await ensureLesson();
     }
 
-    const nameToId = new Map<string, string>();
-    for (const name of uniqueNames) {
+    const uniqueCategoryNames = new Set<string>();
+    const uniqueLessonNames = new Set<string>();
+    for (const r of rows) {
+      const c = (r.categoryName || "").trim();
+      const l = (r.lessonName || "").trim();
+      if (c) uniqueCategoryNames.add(c);
+      if (l) uniqueLessonNames.add(l);
+    }
+
+    const categoryNameToId = new Map<string, string>();
+    for (const name of uniqueCategoryNames) {
       const id = await ensureCategoryByName(name);
-      if (id) nameToId.set(name, id);
+      if (id) categoryNameToId.set(name, id);
+    }
+
+    const lessonNameToId = new Map<string, string>();
+    for (const name of uniqueLessonNames) {
+      const id = await ensureLessonByName(name);
+      if (id) lessonNameToId.set(name, id);
     }
 
     for (const row of rows) {
@@ -115,8 +161,10 @@ export default function ImportPage() {
       const description = (row.description || "").trim();
       if (!hanzi || !pinyin || !english) continue;
 
-      const perRowCategoryId = row.categoryName ? nameToId.get(row.categoryName.trim()) || null : null;
+      const perRowCategoryId = row.categoryName ? categoryNameToId.get(row.categoryName.trim()) || null : null;
+      const perRowLessonId = row.lessonName ? lessonNameToId.get(row.lessonName.trim()) || null : null;
       const finalCategoryId = perRowCategoryId ?? defaultCategoryId;
+      const finalLessonId = perRowLessonId ?? defaultLessonId;
 
       const res = await fetch("/api/words", {
         method: "POST",
@@ -124,7 +172,7 @@ export default function ImportPage() {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ hanzi, pinyin, english, description, category_id: finalCategoryId }),
+        body: JSON.stringify({ hanzi, pinyin, english, description, category_id: finalCategoryId, lesson_id: finalLessonId }),
         credentials: "include",
       });
       if (res.ok) count += 1;
@@ -134,7 +182,6 @@ export default function ImportPage() {
 
   function parseObsidian(md: string): Row[] {
     const lines = md.split(/\r?\n/).map((l) => l.trim());
-    // Try to derive english from a title like: "1. Day - hào - 号" → "Day"
     const titleLine = lines.find((l) => /\S/.test(l)) || "";
     let english = "";
     const titleMatch = titleLine.match(/^[#*\d.\s-]*([^\-#*]+?)\s*-\s*[^-]+-\s*[^-]+$/);
@@ -145,6 +192,7 @@ export default function ImportPage() {
     let meaning = "";
     let pronTip = "";
     let categoryName = "";
+    let lessonName = "";
 
     for (const l of lines) {
       const kv = l.split(":");
@@ -156,6 +204,7 @@ export default function ImportPage() {
         else if (key.startsWith("meaning")) meaning = value.replace(/^[-–]\s*/, "");
         else if (key.startsWith("pronunciation tip")) pronTip = value;
         else if (key.startsWith("category")) categoryName = value;
+        else if (key.startsWith("lesson")) lessonName = value;
       }
     }
 
@@ -164,7 +213,7 @@ export default function ImportPage() {
       english = meaning.split(/[,;\-]/)[0].trim();
     }
     if (hanzi && pinyin && english) {
-      return [{ hanzi, pinyin, english, description, categoryName }];
+      return [{ hanzi, pinyin, english, description, categoryName, lessonName }];
     }
     return [];
   }
@@ -185,7 +234,8 @@ export default function ImportPage() {
         const english = get("english") || get("English") || get("meaning") || get("Meaning");
         const description = get("description") || get("Description") || get("notes") || get("Notes");
         const categoryName = get("category") || get("Category") || get("Category Name") || get("group") || get("Group");
-        if (hanzi && pinyin && english) rows.push({ hanzi, pinyin, english, description, categoryName });
+        const lessonName = get("lesson") || get("Lesson") || get("Lesson Name");
+        if (hanzi && pinyin && english) rows.push({ hanzi, pinyin, english, description, categoryName, lessonName });
       }
       const count = await importRows(rows);
       setImported(count);
@@ -210,18 +260,18 @@ export default function ImportPage() {
           rows.push(...fromObsidian);
           continue;
         }
-        // Fallback simple row formats
         const pipe = block.split("|").map((s) => s.trim());
         const dash = block.split("-").map((s) => s.trim());
         if (pipe.length >= 3) {
-          const [hanzi, pinyin, english, description, categoryName] = [pipe[0], pipe[1], pipe[2], pipe[3] || "", pipe[4] || ""];
-          rows.push({ hanzi, pinyin, english, description, categoryName });
+          const [hanzi, pinyin, english, description, categoryName, lessonName] = [pipe[0], pipe[1], pipe[2], pipe[3] || "", pipe[4] || "", pipe[5] || ""];
+          rows.push({ hanzi, pinyin, english, description, categoryName, lessonName });
         } else if (dash.length >= 3) {
           const [hanzi, pinyin, english] = [dash[0], dash[1], dash[2]];
           const rest = dash.slice(3);
           const description = rest[0] || "";
-          const categoryName = rest.slice(1).join(" - ");
-          rows.push({ hanzi, pinyin, english, description, categoryName });
+          const categoryName = rest[1] || "";
+          const lessonName = rest.slice(2).join(" - ");
+          rows.push({ hanzi, pinyin, english, description, categoryName, lessonName });
         }
       }
       const count = await importRows(rows);
@@ -236,7 +286,7 @@ export default function ImportPage() {
   }
 
   if (!isOwner) {
-    return <div className="max-w-2xl mx-auto w-full"><h1 className="text-2xl font-semibold mb-4">Bulk Import</h1><div className="opacity-70">Admins only.</div></div>;
+    return <div className="max-w-2xl mx-auto w-full"><div className="opacity-70">Admins only.</div></div>;
   }
 
   return (
@@ -255,25 +305,46 @@ export default function ImportPage() {
             </select>
           </div>
           <div>
+            <label className="block text-sm mb-1">Default Lesson</label>
+            <select className="border rounded p-2 w-full" value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
+              <option value="">None</option>
+              {lessons.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm mb-1">Or Create New Category</label>
             <div className="flex gap-2">
               <input className="border rounded p-2 flex-1" placeholder="e.g., Greeting" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
               <button className="px-3 py-2 rounded border" type="button" onClick={ensureCategory} disabled={!newCategoryName.trim() || loading}>Add</button>
             </div>
           </div>
+          <div>
+            <label className="block text-sm mb-1">Or Create New Lesson</label>
+            <div className="flex gap-2">
+              <input className="border rounded p-2 flex-1" placeholder="e.g., Lesson 1" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} />
+              <button className="px-3 py-2 rounded border" type="button" onClick={ensureLesson} disabled={!newLessonName.trim() || loading}>Add</button>
+            </div>
+          </div>
         </div>
 
         <div>
           <div className="font-medium mb-1">CSV Import</div>
-          <p className="text-xs opacity-70 mb-2">Columns supported: hanzi, pinyin, english, description, <strong>category</strong> (optional). If a row has a category, it will be created if needed.</p>
-          <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <button className="ml-2 px-3 py-1 rounded border" onClick={onImportCSV} disabled={!file || loading}>
+          <p className="text-xs opacity-70 mb-2">Columns: hanzi, pinyin, english, description, <strong>category</strong> (optional), <strong>lesson</strong> (optional). Default selections above apply when a row omits them. Unknown categories/lessons are created.</p>
+          <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          {file ? <span className="ml-2 text-xs opacity-70">{file.name}</span> : null}
+          <button
+            className="ml-2 px-3 py-1 rounded border"
+            onClick={(e) => { e.preventDefault(); if (!file) { fileInputRef.current?.click(); return; } onImportCSV(); }}
+            disabled={loading}
+          >
             Import CSV
           </button>
         </div>
         <div>
           <div className="font-medium mb-1">Markdown / Obsidian Import</div>
-          <p className="text-xs opacity-70 mb-2">Supports simple rows and Obsidian fields (Character:, Pinyin:, Meaning:, Pronunciation Tip:, <strong>Category:</strong>). Meaning is stored as description. You can also append category as a 5th field in pipe rows.</p>
+          <p className="text-xs opacity-70 mb-2">Supports fields (Character:, Pinyin:, Meaning:, Pronunciation Tip:, <strong>Category:</strong>, <strong>Lesson:</strong>). Pipe rows support 5th=Category and 6th=Lesson.</p>
           <textarea className="border rounded p-2 w-full h-40" placeholder="Paste notes or rows here" value={text} onChange={(e) => setText(e.target.value)} />
           <button className="mt-2 px-3 py-1 rounded border" onClick={onImportMarkdown} disabled={loading}>
             Import Markdown

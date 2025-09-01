@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FlashcardsClient from "./flashcards-client";
 
-type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null; lesson?: { id: string; name: string } | null };
+type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; sentence?: boolean | null; category?: { id: string; name: string } | null; lesson?: { id: string; name: string } | { id: string; name: string }[] | null };
 type Category = { id: string; name: string };
 type Lesson = { id: string; name: string };
 
@@ -13,6 +13,7 @@ export default function FlashcardsFetch() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(""); // empty = All
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
+  const [includeSentences, setIncludeSentences] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,12 +28,19 @@ export default function FlashcardsFetch() {
         ]);
         if (!wr.ok) throw new Error(`Words failed: ${wr.status}`);
         if (!cr.ok) throw new Error(`Categories failed: ${cr.status}`);
-        if (!lr.ok) throw new Error(`Lessons failed: ${lr.status}`);
+        // lessons may be empty; don't throw on lr failure, just derive from words
         const jw: { words?: Array<Word> } = await wr.json();
         const jc: { categories?: Array<Category> } = await cr.json();
-        const jl: { lessons?: Array<Lesson> } = await lr.json();
+        let jl: { lessons?: Array<Lesson> } = { lessons: [] };
+        try { if (lr.ok) jl = await lr.json(); } catch {}
+
         if (isMounted) {
-          setWords(jw.words ?? []);
+          const ws = (jw.words ?? []).map((w) => ({
+            ...w,
+            lesson: Array.isArray(w.lesson) ? (w.lesson[0] ?? null) : (w.lesson ?? null),
+            category: Array.isArray(w.category) ? (w.category[0] ?? null) : (w.category ?? null),
+          }));
+          setWords(ws);
           setCategories(jc.categories ?? []);
           setLessons(jl.lessons ?? []);
         }
@@ -48,10 +56,11 @@ export default function FlashcardsFetch() {
 
   const filtered = useMemo(() => {
     let list = words;
-    if (selectedCategoryId) list = list.filter((w) => w.category?.id === selectedCategoryId);
-    if (selectedLessonId) list = list.filter((w) => w.lesson?.id === selectedLessonId);
+    if (selectedCategoryId) list = list.filter((w) => (Array.isArray(w.category) ? (w.category[0]?.id) : w.category?.id) === selectedCategoryId);
+    if (selectedLessonId) list = list.filter((w) => (Array.isArray(w.lesson) ? (w.lesson[0]?.id) : w.lesson?.id) === selectedLessonId);
+    if (!includeSentences) list = list.filter((w) => w.sentence !== true);
     return list;
-  }, [words, selectedCategoryId, selectedLessonId]);
+  }, [words, selectedCategoryId, selectedLessonId, includeSentences]);
 
   if (loading) return <div className="opacity-70">Loading flashcards…</div>;
   if (error) return <div className="text-red-600">{error}</div>;
@@ -73,6 +82,10 @@ export default function FlashcardsFetch() {
             {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={includeSentences} onChange={(e) => setIncludeSentences(e.target.checked)} />
+          Include sentences
+        </label>
         <span className="text-xs opacity-70">{filtered.length} cards</span>
       </div>
 
