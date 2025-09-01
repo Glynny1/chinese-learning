@@ -209,16 +209,16 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
         <div className="opacity-60">Due now: {dueCount}</div>
       </div>
 
-      <div className="border rounded p-8 text-center cursor-pointer select-none min-h-48 flex flex-col items-center justify-center" onClick={() => setShowAnswer((s) => !s)}>
+      <div className="border rounded p-10 text-center cursor-pointer select-none min-h-60 flex flex-col items-center justify-center" onClick={() => setShowAnswer((s) => !s)}>
         {!showAnswer ? (
           <div>
-            <div className="text-3xl font-semibold">{current?.hanzi}</div>
-            <div className="opacity-70 mt-1">{current?.pinyin}</div>
+            <div className="text-5xl md:text-6xl font-semibold">{current?.hanzi}</div>
+            <div className="opacity-70 mt-2 text-2xl md:text-3xl">{current?.pinyin}</div>
           </div>
         ) : (
           <div>
-            <div className="text-xl">{current?.english}</div>
-            {current?.description ? <div className="opacity-80 mt-2 max-w-sm mx-auto whitespace-pre-line">{current.description}</div> : null}
+            <div className="text-3xl md:text-4xl">{current?.english}</div>
+            {current?.description ? <div className="opacity-80 mt-3 max-w-sm mx-auto whitespace-pre-line text-lg md:text-xl">{current.description}</div> : null}
           </div>
         )}
       </div>
