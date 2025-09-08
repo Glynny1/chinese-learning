@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
 
@@ -8,6 +8,7 @@ export default function WordsListClient() {
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -35,12 +36,50 @@ export default function WordsListClient() {
     return () => { isMounted = false; };
   }, []);
 
+  function normalize(text: string): string {
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      // Strip diacritics (accents/tones) for more forgiving matching
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^\p{L}\p{N}\s]/gu, "") // remove most punctuation
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function matches(word: Word, q: string): boolean {
+    if (!q) return true;
+    const nq = normalize(q);
+    const haystack = normalize([
+      word.hanzi || "",
+      word.pinyin || "",
+      word.english || "",
+      word.description || "",
+    ].join(" \u2002 "));
+    // All tokens in the query must be present somewhere in the haystack
+    const tokens = nq.split(" ").filter(Boolean);
+    return tokens.every((t) => haystack.includes(t));
+  }
+
+  const filteredWords = useMemo(() => {
+    return words.filter((w) => matches(w, query));
+  }, [words, query]);
+
   if (loading) return <div className="opacity-70">Loading words…</div>;
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
     <div className="mt-8 space-y-3">
-      {words.map((w) => (
+      <div className="mb-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search Hanzi, Pinyin, English, Description"
+          className="border rounded p-2 w-full"
+          aria-label="Search words"
+        />
+      </div>
+      {filteredWords.map((w) => (
         <div key={w.id} className="border rounded p-3">
           <div className="font-semibold text-lg">{w.hanzi} <span className="opacity-60">{w.pinyin}</span></div>
           <div className="text-sm">{w.english}</div>
@@ -49,6 +88,9 @@ export default function WordsListClient() {
         </div>
       ))}
       {words.length === 0 && <div className="opacity-70">No words yet.</div>}
+      {words.length > 0 && filteredWords.length === 0 && (
+        <div className="opacity-70">No matches.</div>
+      )}
     </div>
   );
 }
