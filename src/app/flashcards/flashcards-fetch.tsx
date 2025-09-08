@@ -70,18 +70,18 @@ export default function FlashcardsFetch() {
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap p-3 border rounded bg-black/[.02]">
         <div className="flex items-center gap-2">
           <label className="text-sm">Category:</label>
-          <select className="border rounded p-2" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
+          <select className="border rounded p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
             <option value="">All</option>
             {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Lesson:</label>
-          <select className="border rounded p-2" value={selectedLessonId} onChange={(e) => setSelectedLessonId(e.target.value)}>
+          <select className="border rounded p-2 bg-transparent" value={selectedLessonId} onChange={(e) => setSelectedLessonId(e.target.value)}>
             <option value="">All</option>
             {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
           </select>

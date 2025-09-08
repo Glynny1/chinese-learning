@@ -27,23 +27,25 @@ export default function NavBarClient() {
   }, []);
 
   return (
-    <nav className="w-full flex items-center justify-between py-4">
-      <div className="flex gap-4 items-center">
-        <Link href="/" className="font-semibold">Chinese Learning</Link>
-        <Link href="/words" className="hover:underline">Words</Link>
-        <Link href="/flashcards" className="hover:underline">Flashcards</Link>
-        {isOwner ? <Link href="/import" className="hover:underline">Import</Link> : null}
-      </div>
-      <div className="flex items-center gap-3">
-        {email ? (
-          <>
-            {isOwner ? <span className="text-xs px-2 py-0.5 rounded bg-black/5">Admin</span> : null}
-            <span className="text-sm opacity-75">{email}</span>
-            <LogoutButton />
-          </>
-        ) : (
-          <LoginButton />
-        )}
+    <nav className="sticky top-0 z-50 w-full backdrop-blur supports-[backdrop-filter]:bg-background/70 bg-background/90 border-b">
+      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="flex gap-3 sm:gap-4 items-center">
+          <Link href="/" className="font-semibold tracking-tight hover:opacity-80 transition">Chinese Learning</Link>
+          <Link href="/words" className="px-2 py-1 rounded hover:bg-black/5 transition">Words</Link>
+          <Link href="/flashcards" className="px-2 py-1 rounded hover:bg-black/5 transition">Flashcards</Link>
+          {isOwner ? <Link href="/import" className="px-2 py-1 rounded hover:bg-black/5 transition">Import</Link> : null}
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {email ? (
+            <>
+              {isOwner ? <span className="text-xs px-2 py-0.5 rounded-full bg-black/5">Admin</span> : null}
+              <span className="hidden sm:inline text-sm opacity-75">{email}</span>
+              <LogoutButton />
+            </>
+          ) : (
+            <LoginButton />
+          )}
+        </div>
       </div>
     </nav>
   );

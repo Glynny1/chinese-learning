@@ -9,6 +9,8 @@ export default function WordsListClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,6 +37,19 @@ export default function WordsListClient() {
     load();
     return () => { isMounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    function captureVoices() {
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length) setVoices(v);
+    }
+    window.speechSynthesis.onvoiceschanged = captureVoices;
+    captureVoices();
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
+
+  // Fixed voice/rate/pitch settings; no UI controls here
 
   function normalize(text: string): string {
     return text
@@ -65,6 +80,35 @@ export default function WordsListClient() {
     return words.filter((w) => matches(w, query));
   }, [words, query]);
 
+  function chooseZhVoice(): SpeechSynthesisVoice | null {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+    const v = voices.length ? voices : window.speechSynthesis.getVoices();
+    const ting = v.find((x) => /ting[\-\s\u2010-\u2015]?ting/i.test(x.name));
+    if (ting) return ting;
+    return v.find((x) => x.lang?.toLowerCase().startsWith("zh")) || v.find((x) => /chinese|mandarin|cmn/i.test(x.name)) || v[0] || null;
+  }
+
+  function speakHanzi(text: string, id: string) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    setSpeakingId(id);
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN";
+    u.rate = 0.7;
+    u.pitch = 1.0;
+    const v = chooseZhVoice();
+    if (v) u.voice = v;
+    try { window.speechSynthesis.resume(); } catch {}
+    u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+    if (window.speechSynthesis.speaking) {
+      try { window.speechSynthesis.cancel(); } catch {}
+    }
+    const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(u); } catch {}
+    }, delay);
+  }
+
   if (loading) return <div className="opacity-70">Loading words…</div>;
   if (error) return <div className="text-red-600">{error}</div>;
 
@@ -79,9 +123,20 @@ export default function WordsListClient() {
           aria-label="Search words"
         />
       </div>
+      {/* Voice controls removed; using Ting‑Ting/Chinese voice at fixed rate/pitch */}
       {filteredWords.map((w) => (
         <div key={w.id} className="border rounded p-3">
-          <div className="font-semibold text-lg">{w.hanzi} <span className="opacity-60">{w.pinyin}</span></div>
+          <div className="font-semibold text-lg flex items-center gap-2">
+            <span>{w.hanzi}</span>
+            <button
+              className="text-xs px-2 py-1 rounded border hover:bg-black/5 transition"
+              onClick={() => speakHanzi(w.hanzi, w.id)}
+              aria-label={`Play ${w.hanzi}`}
+            >
+              {speakingId === w.id ? "Playing…" : "Play"}
+            </button>
+            <span className="opacity-60">{w.pinyin}</span>
+          </div>
           <div className="text-sm">{w.english}</div>
           {w.description ? <div className="text-sm opacity-80 mt-1">{w.description}</div> : null}
           {w.category?.name ? <div className="text-xs mt-2 px-2 py-1 rounded bg-black/5 inline-block">{w.category.name}</div> : null}

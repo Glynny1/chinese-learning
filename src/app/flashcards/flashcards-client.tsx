@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null };
 
@@ -108,10 +108,26 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [correct, setCorrect] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
+  const lastSpokenRef = useRef<string | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
     setStore(loadStore());
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    function captureVoices() {
+      const v = window.speechSynthesis.getVoices();
+      if (v && v.length) setVoices(v);
+    }
+    window.speechSynthesis.onvoiceschanged = captureVoices;
+    captureVoices();
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
+
+  // Fixed voice/rate/pitch settings; no UI controls here
 
   const queue: Word[] = useMemo(() => {
     if (!words || words.length === 0) return [];
@@ -190,6 +206,38 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     }
   }
 
+  function chooseZhVoice(): SpeechSynthesisVoice | null {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+    const v = voices.length ? voices : window.speechSynthesis.getVoices();
+    const ting = v.find((x) => /ting[\-\s\u2010-\u2015]?ting/i.test(x.name));
+    if (ting) return ting;
+    return v.find((x) => x.lang?.toLowerCase().startsWith("zh")) || v.find((x) => /chinese|mandarin|cmn/i.test(x.name)) || v[0] || null;
+  }
+
+  function speakCurrent() {
+    const text = current?.hanzi?.trim();
+    if (!text) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    setSpeaking(true);
+    lastSpokenRef.current = text;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-CN";
+    u.rate = 0.7;
+    u.pitch = 1.0;
+    const v = chooseZhVoice();
+    if (v) u.voice = v;
+    try { window.speechSynthesis.resume(); } catch {}
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    if (window.speechSynthesis.speaking) {
+      try { window.speechSynthesis.cancel(); } catch {}
+    }
+    const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(u); } catch {}
+    }, delay);
+  }
+
   const dueCount = useMemo(() => {
     let n = 0;
     for (const w of words) {
@@ -212,7 +260,16 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
       <div className="border rounded p-10 text-center cursor-pointer select-none min-h-60 flex flex-col items-center justify-center" onClick={() => setShowAnswer((s) => !s)}>
         {!showAnswer ? (
           <div>
-            <div className="text-5xl md:text-6xl font-semibold">{current?.hanzi}</div>
+            <div className="text-5xl md:text-6xl font-semibold flex items-center gap-3 justify-center">
+              <span>{current?.hanzi}</span>
+              <button
+                className="text-xs px-2 py-1 rounded border hover:bg-black/5 transition"
+                onClick={(e) => { e.stopPropagation(); speakCurrent(); }}
+                aria-label={current?.hanzi ? `Play ${current.hanzi}` : "Play"}
+              >
+                {speaking ? "Playing…" : "Play"}
+              </button>
+            </div>
             <div className="opacity-70 mt-2 text-2xl md:text-3xl">{current?.pinyin}</div>
           </div>
         ) : (
@@ -224,11 +281,13 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <button className="px-3 py-2 rounded border" title="1" onClick={() => gradeCurrent(0)}>Again</button>
-        <button className="px-3 py-2 rounded border" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
-        <button className="px-3 py-2 rounded border bg-black text-white" title="3" onClick={() => gradeCurrent(2)}>Good</button>
-        <button className="px-3 py-2 rounded border" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="1" onClick={() => gradeCurrent(0)}>Again</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
+        <button className="px-3 py-2 rounded border bg-black text-white hover:opacity-90 transition" title="3" onClick={() => gradeCurrent(2)}>Good</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
       </div>
+
+      {/* Voice controls removed; using Ting‑Ting/Chinese voice at fixed rate/pitch */}
 
       <div className="flex items-center justify-between text-sm opacity-70">
         <div>Card {effectiveQueue.length ? index + 1 : 0} / {effectiveQueue.length}</div>
