@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Prefer a configured site URL (production) and fall back to the request origin
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || requestUrl.origin;
-  return NextResponse.redirect(`${siteUrl}/`);
+  // Redirect back to the same origin where the login was initiated
+  const origin = requestUrl.origin;
+  return NextResponse.redirect(`${origin}/`);
 }

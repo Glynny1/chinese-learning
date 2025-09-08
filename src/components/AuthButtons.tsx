@@ -6,8 +6,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 export function LoginButton() {
   async function onLogin() {
     const supabase = createSupabaseBrowserClient();
-    const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
-    const origin = envSiteUrl || window.location.origin;
+    const origin = window.location.origin;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${origin}/auth/callback` },
