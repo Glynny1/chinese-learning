@@ -102,7 +102,7 @@ function isDue(state: CardState | undefined): boolean {
   return new Date(state.dueAt).getTime() <= Date.now();
 }
 
-export default function FlashcardsClient({ words, mode = "words" }: { words: Word[]; mode?: "words" | "conversations" }) {
+export default function FlashcardsClient({ words, mode = "words", resumeKey }: { words: Word[]; mode?: "words" | "conversations"; resumeKey?: string }) {
   const [store, setStore] = useState<SrsStore>({ perCard: {}, daily: { date: todayKey(), newIntroduced: 0 } });
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -160,15 +160,29 @@ export default function FlashcardsClient({ words, mode = "words" }: { words: Wor
 
   useEffect(() => {
     if (effectiveQueue.length > 0) {
-      setIndex(mode === "conversations" ? 0 : Math.floor(Math.random() * effectiveQueue.length));
+      let start = 0;
+      if (resumeKey && typeof window !== "undefined") {
+        const saved = Number(window.localStorage.getItem(`fc-idx:${resumeKey}`) || "0");
+        if (!Number.isNaN(saved) && saved >= 0 && saved < effectiveQueue.length) start = saved;
+      }
+      setIndex(mode === "conversations" ? start : Math.floor(Math.random() * effectiveQueue.length));
       setShowAnswer(false);
     } else {
       setIndex(0);
       setShowAnswer(false);
     }
-  }, [effectiveQueue.length, mode]);
+  }, [effectiveQueue.length, mode, resumeKey]);
 
   const current: Word | null = effectiveQueue[index] ?? null;
+
+  // Persist index whenever it changes in conversations mode
+  useEffect(() => {
+    try {
+      if (resumeKey && typeof window !== "undefined" && mode === "conversations") {
+        window.localStorage.setItem(`fc-idx:${resumeKey}`, String(index));
+      }
+    } catch {}
+  }, [index, mode, resumeKey]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -217,6 +231,13 @@ export default function FlashcardsClient({ words, mode = "words" }: { words: Wor
       setIndex((i) => (i + 1) % effectiveQueue.length);
       setShowAnswer(false);
     }
+    // Persist index after moving
+    try {
+      if (resumeKey && typeof window !== "undefined") {
+        const nextIdx = mode === ("conversations" as typeof mode) ? Math.min(index + 1, effectiveQueue.length - 1) : index;
+        window.localStorage.setItem(`fc-idx:${resumeKey}` , String(nextIdx));
+      }
+    } catch {}
   }
 
   function chooseZhVoice(): SpeechSynthesisVoice | null {

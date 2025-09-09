@@ -13,9 +13,19 @@ export default function FlashcardsFetch() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(""); // empty = All
-  const [selectedLessonId, setSelectedLessonId] = useState<string>("");
-  const [mode, setMode] = useState<"words" | "conversations">("words");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("fc-cat") || "";
+  }); // empty = All
+  const [selectedLessonId, setSelectedLessonId] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("fc-lesson") || "";
+  });
+  const [mode, setMode] = useState<"words" | "conversations">(() => {
+    if (typeof window === "undefined") return "words";
+    const m = window.localStorage.getItem("fc-mode");
+    return (m === "conversations" || m === "words") ? (m as "words" | "conversations") : "words";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +86,59 @@ export default function FlashcardsFetch() {
     return () => { isMounted = false; };
   }, []);
 
+  // Restore persisted selections after mount (avoids SSR initial-state mismatch)
+  useEffect(() => {
+    try {
+      const m = window.localStorage.getItem("fc-mode");
+      if (m === "conversations" || m === "words") setMode(m as "words" | "conversations");
+      const c = window.localStorage.getItem("fc-cat");
+      if (typeof c === "string") setSelectedCategoryId(c);
+      const l = window.localStorage.getItem("fc-lesson");
+      if (typeof l === "string") setSelectedLessonId(l);
+    } catch {}
+  }, []);
+
+  // Persist selections
+  useEffect(() => {
+    try { window.localStorage.setItem("fc-mode", mode); } catch {}
+  }, [mode]);
+  useEffect(() => {
+    try { window.localStorage.setItem("fc-cat", selectedCategoryId); } catch {}
+  }, [selectedCategoryId]);
+  useEffect(() => {
+    try { window.localStorage.setItem("fc-lesson", selectedLessonId); } catch {}
+  }, [selectedLessonId]);
+
+  // Ensure keys exist even before first change (set current state as defaults)
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("fc-mode") === null) {
+        window.localStorage.setItem("fc-mode", mode);
+      }
+      if (window.localStorage.getItem("fc-cat") === null) {
+        window.localStorage.setItem("fc-cat", selectedCategoryId);
+      }
+      if (window.localStorage.getItem("fc-lesson") === null) {
+        window.localStorage.setItem("fc-lesson", selectedLessonId);
+      }
+    } catch {}
+  }, [mode, selectedCategoryId, selectedLessonId]);
+
+  function resetSession() {
+    try {
+      const resumeWords = `fc-idx:words:${selectedCategoryId || "all"}:${selectedLessonId || "all"}`;
+      const resumeConv = `fc-idx:conversations:${selectedCategoryId || "all"}`;
+      window.localStorage.removeItem("fc-mode");
+      window.localStorage.removeItem("fc-cat");
+      window.localStorage.removeItem("fc-lesson");
+      window.localStorage.removeItem(resumeWords);
+      window.localStorage.removeItem(resumeConv);
+    } catch {}
+    setMode("words");
+    setSelectedCategoryId("");
+    setSelectedLessonId("");
+  }
+
   const filteredWords = useMemo(() => {
     let list = words;
     if (selectedCategoryId) list = list.filter((w) => (Array.isArray(w.category) ? (w.category[0]?.id) : w.category?.id) === selectedCategoryId);
@@ -98,32 +161,41 @@ export default function FlashcardsFetch() {
       <div className="flex items-center gap-3 flex-wrap p-3 border rounded bg-black/[.02]">
         <div className="flex items-center gap-2">
           <label className="text-sm">Mode:</label>
-          <select className="border rounded p-2 bg-transparent" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+          <select className="border rounded p-2 bg-transparent" value={mode} onChange={(e) => { const v = e.target.value as typeof mode; setMode(v); try { window.localStorage.setItem("fc-mode", v); } catch {} }}>
             <option value="words">Words</option>
             <option value="conversations">Conversations</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Category:</label>
-          <select className="border rounded p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
+          <select className="border rounded p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => { const v = e.target.value; setSelectedCategoryId(v); try { window.localStorage.setItem("fc-cat", v); } catch {} }}>
             <option value="">All</option>
             {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Lesson:</label>
-          <select className="border rounded p-2 bg-transparent" value={selectedLessonId} onChange={(e) => setSelectedLessonId(e.target.value)} disabled={mode !== "words"}>
+          <select className="border rounded p-2 bg-transparent" value={selectedLessonId} onChange={(e) => { const v = e.target.value; setSelectedLessonId(v); try { window.localStorage.setItem("fc-lesson", v); } catch {} }} disabled={mode !== "words"}>
             <option value="">All</option>
             {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
           </select>
         </div>
         <span className="text-xs opacity-70">{mode === "words" ? filteredWords.length : filteredConversations.length} cards</span>
+        <button className="ml-auto px-3 py-1 rounded border text-sm hover:bg-black/5" onClick={resetSession}>Reset</button>
       </div>
 
       {mode === "words" ? (
-        <FlashcardsClient words={filteredWords} mode="words" />
+        <FlashcardsClient
+          words={filteredWords}
+          mode="words"
+          resumeKey={`words:${selectedCategoryId || "all"}:${selectedLessonId || "all"}`}
+        />
       ) : (
-        <FlashcardsClient words={filteredConversations as unknown as Word[]} mode="conversations" />
+        <FlashcardsClient
+          words={filteredConversations as unknown as Word[]}
+          mode="conversations"
+          resumeKey={`conversations:${selectedCategoryId || "all"}`}
+        />
       )}
     </div>
   );
