@@ -1,66 +1,46 @@
--- Extensions
-create extension if not exists "pgcrypto";
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- Tables
-create table if not exists public.categories (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null,
-  name text not null,
-  created_at timestamptz not null default now()
+CREATE TABLE public.categories (
+  name text,
+  user_id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT categories_pkey PRIMARY KEY (id)
 );
-
-create table if not exists public.lessons (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null,
-  name text not null,
-  created_at timestamptz not null default now()
+CREATE TABLE public.conversations (
+  user_id uuid NOT NULL,
+  hanzi text,
+  pinyin text,
+  category_id uuid NOT NULL,
+  conversation_order integer NOT NULL,
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  english text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT conversations_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
 );
-
-create table if not exists public.words (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null,
-  hanzi text not null,
-  pinyin text not null,
-  english text not null,
+CREATE TABLE public.lessons (
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT lessons_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.words (
+  sentence boolean,
+  user_id uuid NOT NULL,
+  hanzi text NOT NULL,
+  pinyin text NOT NULL,
+  english text NOT NULL,
   description text,
-  category_id uuid references public.categories(id) on delete set null,
-  lesson_id uuid references public.lessons(id) on delete set null,
-  created_at timestamptz not null default now()
+  category_id uuid,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  lesson_id uuid,
+  CONSTRAINT words_pkey PRIMARY KEY (id),
+  CONSTRAINT words_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.lessons(id),
+  CONSTRAINT words_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
 );
-
--- Enable RLS
-alter table public.categories enable row level security;
-alter table public.lessons enable row level security;
-alter table public.words enable row level security;
-
--- Policies: public can SELECT owner content; only owner can INSERT/UPDATE/DELETE
--- Replace YOUR_OWNER_UUID with your actual user UUID
-
-create policy if not exists "Public read owner's categories" on public.categories
-  for select using (user_id = 'YOUR_OWNER_UUID'::uuid);
-
-create policy if not exists "Owner manages categories" on public.categories
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-create policy if not exists "Public read owner's lessons" on public.lessons
-  for select using (user_id = 'YOUR_OWNER_UUID'::uuid);
-
-create policy if not exists "Owner manages lessons" on public.lessons
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-create policy if not exists "Public read owner's words" on public.words
-  for select using (user_id = 'YOUR_OWNER_UUID'::uuid);
-
-create policy if not exists "Owner manages words" on public.words
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
--- Indexes
-create index if not exists idx_categories_user on public.categories(user_id);
-create unique index if not exists uniq_categories_user_name on public.categories(user_id, name);
-
-create index if not exists idx_lessons_user on public.lessons(user_id);
-create unique index if not exists uniq_lessons_user_name on public.lessons(user_id, name);
-
-create index if not exists idx_words_user on public.words(user_id);
-create index if not exists idx_words_category on public.words(category_id);
-create index if not exists idx_words_lesson on public.words(lesson_id);

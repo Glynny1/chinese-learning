@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null };
+type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; type?: string | null };
 
 type Grade = 0 | 1 | 2 | 3; // 0=Again,1=Hard,2=Good,3=Easy
 
@@ -102,7 +102,7 @@ function isDue(state: CardState | undefined): boolean {
   return new Date(state.dueAt).getTime() <= Date.now();
 }
 
-export default function FlashcardsClient({ words }: { words: Word[] }) {
+export default function FlashcardsClient({ words, mode = "words" }: { words: Word[]; mode?: "words" | "conversations" }) {
   const [store, setStore] = useState<SrsStore>({ perCard: {}, daily: { date: todayKey(), newIntroduced: 0 } });
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -131,6 +131,10 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
 
   const queue: Word[] = useMemo(() => {
     if (!words || words.length === 0) return [];
+    if (mode === "conversations") {
+      // Conversations should preserve provided order (already sorted upstream)
+      return [...words];
+    }
     const due: Word[] = [];
     const fresh: Word[] = [];
     for (const w of words) {
@@ -149,20 +153,20 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     const cappedFreshCount = Math.max(0, NEW_DAILY_CAP - store.daily.newIntroduced);
     const freshCapped = shuffle(fresh).slice(0, cappedFreshCount);
     return [...shuffle(due), ...freshCapped];
-  }, [words, store]);
+  }, [words, store, mode]);
 
   // If no due/new, fall back to practicing the whole filtered set so it never goes blank
   const effectiveQueue = queue.length > 0 ? queue : words;
 
   useEffect(() => {
     if (effectiveQueue.length > 0) {
-      setIndex(Math.floor(Math.random() * effectiveQueue.length));
+      setIndex(mode === "conversations" ? 0 : Math.floor(Math.random() * effectiveQueue.length));
       setShowAnswer(false);
     } else {
       setIndex(0);
       setShowAnswer(false);
     }
-  }, [effectiveQueue.length]);
+  }, [effectiveQueue.length, mode]);
 
   const current: Word | null = effectiveQueue[index] ?? null;
 
@@ -180,6 +184,15 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
 
   function gradeCurrent(grade: Grade) {
     if (!current) return;
+    if (mode === "conversations") {
+      // Linear progression: always move to the next card in order
+      setReviewed((r) => r + 1);
+      if (grade >= 2) setCorrect((c) => c + 1);
+      setIndex((i) => (i + 1 < effectiveQueue.length ? i + 1 : 0));
+      setShowAnswer(false);
+      return;
+    }
+
     const prev = loadStore();
     const curState = prev.perCard[current.id];
     const nextState = scheduleNext(curState, grade);
@@ -254,37 +267,55 @@ export default function FlashcardsClient({ words }: { words: Word[] }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between text-sm">
         <div className="opacity-80">Reviewed: {reviewed} · Accuracy: {reviewed ? Math.round((correct / reviewed) * 100) : 0}%</div>
-        <div className="opacity-60">Due now: {dueCount}</div>
-      </div>
-
-      <div className="border rounded p-10 text-center cursor-pointer select-none min-h-60 flex flex-col items-center justify-center" onClick={() => setShowAnswer((s) => !s)}>
-        {!showAnswer ? (
-          <div>
-            <div className="text-5xl md:text-6xl font-semibold flex items-center gap-3 justify-center">
-              <span>{current?.hanzi}</span>
-              <button
-                className="text-xs px-2 py-1 rounded border hover:bg-black/5 transition"
-                onClick={(e) => { e.stopPropagation(); speakCurrent(); }}
-                aria-label={current?.hanzi ? `Play ${current.hanzi}` : "Play"}
-              >
-                {speaking ? "Playing…" : "Play"}
-              </button>
-            </div>
-            <div className="opacity-70 mt-2 text-2xl md:text-3xl">{current?.pinyin}</div>
-          </div>
+        {mode === "words" ? (
+          <div className="opacity-60">Due now: {dueCount}</div>
         ) : (
-          <div>
-            <div className="text-3xl md:text-4xl">{current?.english}</div>
-            {current?.description ? <div className="opacity-80 mt-3 max-w-sm mx-auto whitespace-pre-line text-lg md:text-xl">{current.description}</div> : null}
-          </div>
+          <div className="opacity-60">Sequence</div>
         )}
       </div>
 
+      <div className="[perspective:1000px]">
+        <div
+          className={`relative h-[380px] sm:h-[420px] md:h-[460px] w-full transition-transform duration-500 [transform-style:preserve-3d] ${showAnswer ? "[transform:rotateY(180deg)]" : ""}`}
+          onClick={() => setShowAnswer((s) => !s)}
+        >
+          <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] overflow-hidden">
+            <div className="h-6 mb-2">
+              {mode === "conversations" && current?.type ? (
+                <div className="text-sm uppercase tracking-wide opacity-85 max-w-[96%] whitespace-nowrap">{current.type}</div>
+              ) : null}
+            </div>
+            <div className="font-semibold flex items-center gap-3 justify-center text-[clamp(24px,7vw,64px)] leading-snug whitespace-normal max-w-[92%]">
+              <span className="break-words">{current?.hanzi}</span>
+              <button
+                className="text-sm px-2 py-1 rounded border active:translate-y-px active:scale-[0.98] hover:bg-black/5 transition"
+                onClick={(e) => { e.stopPropagation(); if (speaking) { try { window.speechSynthesis.cancel(); } catch {} setSpeaking(false); } else { speakCurrent(); } }}
+                aria-label={speaking ? "Stop" : (current?.hanzi ? `Play ${current.hanzi}` : "Play")}
+                title={speaking ? "Stop" : "Play"}
+              >
+                {speaking ? "⏹" : "▶"}
+              </button>
+            </div>
+            <div className="opacity-85 mt-2 text-[clamp(14px,3.5vw,22px)] whitespace-normal break-words max-w-[92%] leading-snug">
+              {current?.pinyin}
+            </div>
+          </div>
+          <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] [transform:rotateY(180deg)]">
+            <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-normal break-words max-w-[92%]">{current?.english}</div>
+            {current?.description ? (
+              <div className="opacity-80 mt-3 max-w-md mx-auto whitespace-pre-line break-words text-[clamp(14px,3.5vw,20px)] leading-relaxed">
+                {current.description}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-4 gap-2">
-        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="1" onClick={() => gradeCurrent(0)}>Again</button>
-        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
-        <button className="px-3 py-2 rounded border bg-black text-white hover:opacity-90 transition" title="3" onClick={() => gradeCurrent(2)}>Good</button>
-        <button className="px-3 py-2 rounded border hover:bg-black/5 transition" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="1" onClick={() => gradeCurrent(0)}>Again</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
+        <button className="px-3 py-2 rounded border bg-black text-white hover:opacity-90 active:translate-y-px active:scale-[0.98] transition" title="3" onClick={() => gradeCurrent(2)}>Good</button>
+        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
       </div>
 
       {/* Voice controls removed; using Ting‑Ting/Chinese voice at fixed rate/pitch */}

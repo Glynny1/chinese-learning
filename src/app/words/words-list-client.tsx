@@ -129,11 +129,12 @@ export default function WordsListClient() {
           <div className="font-semibold text-lg flex items-center gap-2">
             <span>{w.hanzi}</span>
             <button
-              className="text-xs px-2 py-1 rounded border hover:bg-black/5 transition"
-              onClick={() => speakHanzi(w.hanzi, w.id)}
-              aria-label={`Play ${w.hanzi}`}
+              className="text-sm px-2 py-1 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition"
+              onClick={() => { if (speakingId === w.id) { try { window.speechSynthesis.cancel(); } catch {} setSpeakingId(null); } else { speakHanzi(w.hanzi, w.id); } }}
+              aria-label={speakingId === w.id ? "Stop" : `Play ${w.hanzi}`}
+              title={speakingId === w.id ? "Stop" : "Play"}
             >
-              {speakingId === w.id ? "Playing…" : "Play"}
+              {speakingId === w.id ? "⏹" : "▶"}
             </button>
             <span className="opacity-60">{w.pinyin}</span>
           </div>
