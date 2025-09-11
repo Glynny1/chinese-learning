@@ -103,7 +103,7 @@ function isDue(state: CardState | undefined): boolean {
   return new Date(state.dueAt).getTime() <= Date.now();
 }
 
-export default function FlashcardsClient({ words, mode = "words", resumeKey }: { words: Word[]; mode?: "words" | "conversations"; resumeKey?: string }) {
+export default function FlashcardsClient({ words, mode = "words", resumeKey, listeningOnly = false }: { words: Word[]; mode?: "words" | "conversations"; resumeKey?: string; listeningOnly?: boolean }) {
   const [store, setStore] = useState<SrsStore>({ perCard: {}, daily: { date: todayKey(), newIntroduced: 0 } });
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -318,7 +318,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
               ) : null}
             </div>
             <div className="font-semibold flex items-center gap-3 justify-center text-[clamp(24px,7vw,64px)] leading-snug whitespace-normal max-w-[92%]">
-              <span className="break-words">{current?.hanzi}</span>
+              {!listeningOnly && <span className="break-words">{current?.hanzi}</span>}
               <button
                 className="text-sm px-2 py-1 btn-ghost"
                 onClick={(e) => { e.stopPropagation(); if (speaking) { try { window.speechSynthesis.cancel(); } catch {} setSpeaking(false); } else { speakCurrent(); } }}
@@ -328,17 +328,23 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
                 {speaking ? "⏹" : "▶"}
               </button>
             </div>
-            <div className="opacity-85 mt-2 text-[clamp(14px,3.5vw,22px)] whitespace-normal break-words max-w-[92%] leading-snug">
-              {current?.pinyin}
-            </div>
+            {!listeningOnly && (
+              <div className="opacity-85 mt-2 text-[clamp(14px,3.5vw,22px)] whitespace-normal break-words max-w-[92%] leading-snug">
+                {current?.pinyin}
+              </div>
+            )}
           </div>
           <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-normal break-words max-w-[92%]">{current?.english}</div>
-            {current?.description ? (
-              <div className="opacity-80 mt-3 max-w-md mx-auto whitespace-pre-line break-words text-[clamp(14px,3.5vw,20px)] leading-relaxed">
-                {current.description}
-              </div>
-            ) : null}
+            {!listeningOnly && (
+              <>
+                <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-normal break-words max-w-[92%]">{current?.english}</div>
+                {current?.description ? (
+                  <div className="opacity-80 mt-3 max-w-md mx-auto whitespace-pre-line break-words text-[clamp(14px,3.5vw,20px)] leading-relaxed">
+                    {current.description}
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -26,6 +26,10 @@ export default function FlashcardsFetch() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [listeningOnly, setListeningOnly] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("fc-listen") === "1";
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +93,8 @@ export default function FlashcardsFetch() {
       if (typeof c === "string") setSelectedCategoryId(c);
       const l = window.localStorage.getItem("fc-lesson");
       if (typeof l === "string") setSelectedLessonId(l);
+      const lst = window.localStorage.getItem("fc-listen");
+      if (lst === "0" || lst === "1") setListeningOnly(lst === "1");
     } catch {}
   }, []);
 
@@ -102,6 +108,9 @@ export default function FlashcardsFetch() {
   useEffect(() => {
     try { window.localStorage.setItem("fc-lesson", selectedLessonId); } catch {}
   }, [selectedLessonId]);
+  useEffect(() => {
+    try { window.localStorage.setItem("fc-listen", listeningOnly ? "1" : "0"); } catch {}
+  }, [listeningOnly]);
 
   // Ensure keys exist even before first change (set current state as defaults)
   useEffect(() => {
@@ -211,6 +220,10 @@ export default function FlashcardsFetch() {
         </div>
         
         <span className="text-xs opacity-70">{mode === "words" ? filteredWords.length : filteredConversations.length} cards</span>
+        <label className="ml-auto flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={listeningOnly} onChange={(e) => setListeningOnly(e.target.checked)} />
+          Listening only
+        </label>
         <button className="ml-auto px-3 py-1 rounded border text-sm hover:bg-black/5" onClick={resetSession}>Reset</button>
       </div>
 
@@ -219,12 +232,14 @@ export default function FlashcardsFetch() {
           words={filteredWords}
           mode="words"
           resumeKey={`words:${selectedCategoryId || "all"}`}
+          listeningOnly={listeningOnly}
         />
       ) : (
         <FlashcardsClient
           words={filteredConversations as unknown as Word[]}
           mode="conversations"
           resumeKey={`conversations:${selectedCategoryId || "all"}`}
+          listeningOnly={listeningOnly}
         />
       )}
     </div>
