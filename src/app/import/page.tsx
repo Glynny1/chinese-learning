@@ -47,12 +47,11 @@ export default function ImportPage() {
   useEffect(() => {
     async function loadMeta() {
       try {
-        const [cr, lr] = await Promise.all([
+        const [cr] = await Promise.all([
           fetch("/api/categories", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
-          fetch("/api/lessons", { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, credentials: "include" }),
         ]);
         if (cr.ok) { const j = await cr.json(); setCategories(j.categories || []); }
-        if (lr.ok) { const j = await lr.json(); setLessons(j.lessons || []); }
+        
       } catch {}
     }
     if (accessToken && isOwner) loadMeta();
@@ -79,26 +78,7 @@ export default function ImportPage() {
     return null;
   }
 
-  async function ensureLessonByName(name: string): Promise<string | null> {
-    const clean = name.trim();
-    if (!clean) return null;
-    const res = await fetch("/api/lessons", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: JSON.stringify({ name: clean }),
-      credentials: "include",
-    });
-    if (!res.ok) return null;
-    const j = await res.json();
-    if (j?.id && j?.name) {
-      setLessons((prev) => [{ id: j.id, name: j.name }, ...prev.filter((c) => c.id !== j.id)]);
-      return j.id as string;
-    }
-    return null;
-  }
+  async function ensureLessonByName(name: string): Promise<string | null> { return null; }
 
   async function ensureCategory(): Promise<string | null> {
     if (!newCategoryName.trim()) return categoryId || null;
@@ -128,10 +108,7 @@ export default function ImportPage() {
       defaultCategoryId = await ensureCategory();
     }
 
-    let defaultLessonId: string | null = lessonId || null;
-    if (!defaultLessonId && newLessonName.trim()) {
-      defaultLessonId = await ensureLesson();
-    }
+    let defaultLessonId: string | null = null;
 
     const uniqueCategoryNames = new Set<string>();
     const uniqueLessonNames = new Set<string>();
@@ -162,7 +139,7 @@ export default function ImportPage() {
       if (!hanzi || !pinyin || !english) continue;
 
       const perRowCategoryId = row.categoryName ? categoryNameToId.get(row.categoryName.trim()) || null : null;
-      const perRowLessonId = row.lessonName ? lessonNameToId.get(row.lessonName.trim()) || null : null;
+      const perRowLessonId = null;
       const finalCategoryId = perRowCategoryId ?? defaultCategoryId;
       const finalLessonId = perRowLessonId ?? defaultLessonId;
 
@@ -172,7 +149,7 @@ export default function ImportPage() {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ hanzi, pinyin, english, description, category_id: finalCategoryId, lesson_id: finalLessonId }),
+        body: JSON.stringify({ hanzi, pinyin, english, description, category_id: finalCategoryId }),
         credentials: "include",
       });
       if (res.ok) count += 1;
@@ -304,15 +281,7 @@ export default function ImportPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm mb-1">Default Lesson</label>
-            <select className="border rounded p-2 w-full" value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
-              <option value="">None</option>
-              {lessons.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-          </div>
+          
           <div>
             <label className="block text-sm mb-1">Or Create New Category</label>
             <div className="flex gap-2">
@@ -320,18 +289,12 @@ export default function ImportPage() {
               <button className="px-3 py-2 rounded border" type="button" onClick={ensureCategory} disabled={!newCategoryName.trim() || loading}>Add</button>
             </div>
           </div>
-          <div>
-            <label className="block text-sm mb-1">Or Create New Lesson</label>
-            <div className="flex gap-2">
-              <input className="border rounded p-2 flex-1" placeholder="e.g., Lesson 1" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} />
-              <button className="px-3 py-2 rounded border" type="button" onClick={ensureLesson} disabled={!newLessonName.trim() || loading}>Add</button>
-            </div>
-          </div>
+          
         </div>
 
         <div>
           <div className="font-medium mb-1">CSV Import</div>
-          <p className="text-xs opacity-70 mb-2">Columns: hanzi, pinyin, english, description, <strong>category</strong> (optional), <strong>lesson</strong> (optional). Default selections above apply when a row omits them. Unknown categories/lessons are created.</p>
+          <p className="text-xs opacity-70 mb-2">Columns: hanzi, pinyin, english, description, <strong>category</strong> (optional). Default selection applies when a row omits it. Unknown categories are created.</p>
           <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           {file ? <span className="ml-2 text-xs opacity-70">{file.name}</span> : null}
           <button
@@ -344,7 +307,7 @@ export default function ImportPage() {
         </div>
         <div>
           <div className="font-medium mb-1">Markdown / Obsidian Import</div>
-          <p className="text-xs opacity-70 mb-2">Supports fields (Character:, Pinyin:, Meaning:, Pronunciation Tip:, <strong>Category:</strong>, <strong>Lesson:</strong>). Pipe rows support 5th=Category and 6th=Lesson.</p>
+          <p className="text-xs opacity-70 mb-2">Supports fields (Character:, Pinyin:, Meaning:, Pronunciation Tip:, <strong>Category:</strong>). Pipe rows support 5th=Category.</p>
           <textarea className="border rounded p-2 w-full h-40" placeholder="Paste notes or rows here" value={text} onChange={(e) => setText(e.target.value)} />
           <button className="mt-2 px-3 py-1 rounded border" onClick={onImportMarkdown} disabled={loading}>
             Import Markdown

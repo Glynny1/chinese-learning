@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import FlashcardsClient from "./flashcards-client";
 
-type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null; lesson?: { id: string; name: string } | { id: string; name: string }[] | null };
+type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
 type Conversation = { id: string; hanzi: string; pinyin: string; english: string; category_id: string | null; conversation_order: number; type?: string | null };
 type Category = { id: string; name: string };
 type Lesson = { id: string; name: string };
@@ -18,10 +18,7 @@ export default function FlashcardsFetch() {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("fc-cat") || "";
   }); // empty = All
-  const [selectedLessonId, setSelectedLessonId] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem("fc-lesson") || "";
-  });
+  const [selectedLessonId, setSelectedLessonId] = useState<string>("");
   const [mode, setMode] = useState<"words" | "conversations">(() => {
     if (typeof window === "undefined") return "words";
     const m = window.localStorage.getItem("fc-mode");
@@ -34,17 +31,14 @@ export default function FlashcardsFetch() {
     let isMounted = true;
     async function load() {
       try {
-        const [wr, lr, cr, gr] = await Promise.all([
+        const [wr, cr, gr] = await Promise.all([
           fetch("/api/words", { cache: "no-store" }),
-          fetch("/api/lessons", { cache: "no-store" }),
           fetch("/api/conversations", { cache: "no-store" }),
           fetch("/api/categories", { cache: "no-store" }),
         ]);
         if (!wr.ok) throw new Error(`Words failed: ${wr.status}`);
         // lessons may be empty; don't throw on lr failure, just derive from words
         const jw: { words?: Array<Word> } = await wr.json();
-        let jl: { lessons?: Array<Lesson> } = { lessons: [] };
-        try { if (lr.ok) jl = await lr.json(); } catch {}
         let jc: { conversations?: Array<Conversation> } = { conversations: [] };
         let jg: { categories?: Array<Category> } = { categories: [] };
         try { if (cr.ok) jc = await cr.json(); } catch {}
@@ -53,7 +47,6 @@ export default function FlashcardsFetch() {
         if (isMounted) {
           const ws = (jw.words ?? []).map((w) => ({
             ...w,
-            lesson: Array.isArray(w.lesson) ? (w.lesson[0] ?? null) : (w.lesson ?? null),
             category: Array.isArray(w.category) ? (w.category[0] ?? null) : (w.category ?? null),
           }));
           const cs = (jc.conversations ?? []) as Conversation[];
@@ -75,7 +68,7 @@ export default function FlashcardsFetch() {
             }
             setCategories(Array.from(cats.values()));
           }
-          setLessons(jl.lessons ?? []);
+          setLessons([]);
         }
       } catch (e) {
         if (isMounted) setError(e instanceof Error ? e.message : "Failed to load");
@@ -143,9 +136,8 @@ export default function FlashcardsFetch() {
   const filteredWords = useMemo(() => {
     let list = words;
     if (selectedCategoryId) list = list.filter((w) => (Array.isArray(w.category) ? (w.category[0]?.id) : w.category?.id) === selectedCategoryId);
-    if (selectedLessonId) list = list.filter((w) => (Array.isArray(w.lesson) ? (w.lesson[0]?.id) : w.lesson?.id) === selectedLessonId);
     return list;
-  }, [words, selectedCategoryId, selectedLessonId]);
+  }, [words, selectedCategoryId]);
 
   const filteredConversations = useMemo(() => {
     let list = conversations;
@@ -217,13 +209,7 @@ export default function FlashcardsFetch() {
             {visibleCategories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Lesson:</label>
-          <select className="border input-theme p-2 bg-transparent" value={selectedLessonId} onChange={(e) => { const v = e.target.value; setSelectedLessonId(v); try { window.localStorage.setItem("fc-lesson", v); } catch {} }} disabled={mode !== "words"}>
-            <option value="">All</option>
-            {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
-          </select>
-        </div>
+        
         <span className="text-xs opacity-70">{mode === "words" ? filteredWords.length : filteredConversations.length} cards</span>
         <button className="ml-auto px-3 py-1 rounded border text-sm hover:bg-black/5" onClick={resetSession}>Reset</button>
       </div>
@@ -232,7 +218,7 @@ export default function FlashcardsFetch() {
         <FlashcardsClient
           words={filteredWords}
           mode="words"
-          resumeKey={`words:${selectedCategoryId || "all"}:${selectedLessonId || "all"}`}
+          resumeKey={`words:${selectedCategoryId || "all"}`}
         />
       ) : (
         <FlashcardsClient
