@@ -22,11 +22,9 @@ export default function ImportPage() {
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  
   const [categoryId, setCategoryId] = useState<string>("");
-  const [lessonId, setLessonId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newLessonName, setNewLessonName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -90,15 +88,7 @@ export default function ImportPage() {
     return id;
   }
 
-  async function ensureLesson(): Promise<string | null> {
-    if (!newLessonName.trim()) return lessonId || null;
-    const id = await ensureLessonByName(newLessonName);
-    if (id) {
-      setNewLessonName("");
-      setLessonId(id);
-    }
-    return id;
-  }
+  
 
   async function importRows(rows: Array<Row>) {
     let count = 0;
@@ -108,7 +98,7 @@ export default function ImportPage() {
       defaultCategoryId = await ensureCategory();
     }
 
-    let defaultLessonId: string | null = null;
+    const defaultLessonId: string | null = null;
 
     const uniqueCategoryNames = new Set<string>();
     const uniqueLessonNames = new Set<string>();
@@ -139,9 +129,7 @@ export default function ImportPage() {
       if (!hanzi || !pinyin || !english) continue;
 
       const perRowCategoryId = row.categoryName ? categoryNameToId.get(row.categoryName.trim()) || null : null;
-      const perRowLessonId = null;
       const finalCategoryId = perRowCategoryId ?? defaultCategoryId;
-      const finalLessonId = perRowLessonId ?? defaultLessonId;
 
       const res = await fetch("/api/words", {
         method: "POST",
@@ -211,7 +199,7 @@ export default function ImportPage() {
         const english = get("english") || get("English") || get("meaning") || get("Meaning");
         const description = get("description") || get("Description") || get("notes") || get("Notes");
         const categoryName = get("category") || get("Category") || get("Category Name") || get("group") || get("Group");
-        const lessonName = get("lesson") || get("Lesson") || get("Lesson Name");
+        const lessonName = "";
         if (hanzi && pinyin && english) rows.push({ hanzi, pinyin, english, description, categoryName, lessonName });
       }
       const count = await importRows(rows);

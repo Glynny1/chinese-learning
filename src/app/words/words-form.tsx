@@ -16,9 +16,8 @@ export function WordsForm() {
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessons] = useState<Lesson[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newLessonName, setNewLessonName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function WordsForm() {
     try {
       let category_id: string | null = form.categoryId || null;
       if (!category_id && newCategoryName.trim()) category_id = await ensureCategory();
-      let lesson_id: string | null = null;
+      const lesson_id: string | null = null;
 
       const res = await fetch("/api/words", {
         method: "POST",
@@ -98,7 +97,6 @@ export function WordsForm() {
       }
       setForm({ hanzi: "", pinyin: "", english: "", description: "", categoryId: "" });
       setNewCategoryName("");
-      setNewLessonName("");
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to add word";

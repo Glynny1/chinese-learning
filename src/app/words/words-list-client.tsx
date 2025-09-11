@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
@@ -63,7 +63,7 @@ export default function WordsListClient() {
       .trim();
   }
 
-  function matches(word: Word, q: string): boolean {
+  const matches = useCallback((word: Word, q: string): boolean => {
     if (!q) return true;
     const nq = normalize(q);
     const haystack = normalize([
@@ -75,11 +75,11 @@ export default function WordsListClient() {
     // All tokens in the query must be present somewhere in the haystack
     const tokens = nq.split(" ").filter(Boolean);
     return tokens.every((t) => haystack.includes(t));
-  }
+  }, []);
 
   const filteredWords = useMemo(() => {
     return words.filter((w) => matches(w, query));
-  }, [words, query]);
+  }, [words, query, matches]);
 
   function chooseZhVoice(): SpeechSynthesisVoice | null {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
