@@ -154,6 +154,39 @@ export default function FlashcardsFetch() {
     return [...list].sort((a, b) => (a.conversation_order ?? 0) - (b.conversation_order ?? 0));
   }, [conversations, selectedCategoryId]);
 
+  // Compute which categories actually have items for the current mode
+  const availableCategoryIdsForWords = useMemo(() => {
+    const ids = new Set<string>();
+    for (const w of words) {
+      const cid = (Array.isArray(w.category) ? w.category?.[0]?.id : w.category?.id) as string | undefined;
+      if (cid) ids.add(cid);
+    }
+    return ids;
+  }, [words]);
+
+  const availableCategoryIdsForConversations = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of conversations) {
+      if (c.category_id) ids.add(c.category_id);
+    }
+    return ids;
+  }, [conversations]);
+
+  const visibleCategories = useMemo(() => {
+    const allow = mode === "words" ? availableCategoryIdsForWords : availableCategoryIdsForConversations;
+    // If no categories are available yet (e.g., empty dataset), fall back to all categories
+    if (allow.size === 0) return categories;
+    return categories.filter((c) => allow.has(c.id));
+  }, [categories, mode, availableCategoryIdsForWords, availableCategoryIdsForConversations]);
+
+  // If current selection isn't available in the current mode, reset to All
+  useEffect(() => {
+    const allow = mode === "words" ? availableCategoryIdsForWords : availableCategoryIdsForConversations;
+    if (selectedCategoryId && !allow.has(selectedCategoryId)) {
+      setSelectedCategoryId("");
+    }
+  }, [mode, selectedCategoryId, availableCategoryIdsForWords, availableCategoryIdsForConversations]);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -181,7 +214,7 @@ export default function FlashcardsFetch() {
           <label className="text-sm">Category:</label>
           <select className="border input-theme p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => { const v = e.target.value; setSelectedCategoryId(v); try { window.localStorage.setItem("fc-cat", v); } catch {} }}>
             <option value="">All</option>
-            {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+            {visibleCategories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
         </div>
         <div className="flex items-center gap-2">
