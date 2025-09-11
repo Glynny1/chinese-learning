@@ -8,7 +8,7 @@ export async function GET() {
   if (!OWNER_USER_ID) return NextResponse.json({ conversations: [] });
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, hanzi, pinyin, english, category_id, conversation_order, type")
+    .select("id, hanzi, pinyin, english, description, category_id, conversation_order, type")
     .eq("user_id", OWNER_USER_ID)
     .order("conversation_order", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import FlashcardsClient from "./flashcards-client";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
-type Conversation = { id: string; hanzi: string; pinyin: string; english: string; category_id: string | null; conversation_order: number; type?: string | null };
+type Conversation = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category_id: string | null; conversation_order: number; type?: string | null };
 type Category = { id: string; name: string };
 type Lesson = { id: string; name: string };
 
