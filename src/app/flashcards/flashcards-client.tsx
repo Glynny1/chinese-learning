@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSwipeable } from "react-swipeable";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; type?: string | null };
 
@@ -175,6 +176,16 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
 
   const current: Word | null = effectiveQueue[index] ?? null;
 
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => gradeCurrent(1), // Hard
+    onSwipedRight: () => gradeCurrent(2), // Good
+    onSwipedUp: () => setShowAnswer((s) => !s),
+    onSwipedDown: () => setShowAnswer((s) => !s),
+    preventScrollOnSwipe: true,
+    trackTouch: true,
+    trackMouse: false,
+  });
+
   // Persist index whenever it changes in conversations mode
   useEffect(() => {
     try {
@@ -281,7 +292,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
   }, [words, store]);
 
   if (words.length === 0) {
-    return <div className="opacity-70">Add some words to practice.</div>;
+    return <div className="opacity-70">No words available. Please select a different mode or category.</div>;
   }
 
   return (
@@ -295,7 +306,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
         )}
       </div>
 
-      <div className="[perspective:1000px]">
+      <div className="[perspective:1000px]" {...swipeHandlers}>
         <div
           className={`relative h-[380px] sm:h-[420px] md:h-[460px] w-full transition-transform duration-500 [transform-style:preserve-3d] ${showAnswer ? "[transform:rotateY(180deg)]" : ""}`}
           onClick={() => setShowAnswer((s) => !s)}
@@ -309,7 +320,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
             <div className="font-semibold flex items-center gap-3 justify-center text-[clamp(24px,7vw,64px)] leading-snug whitespace-normal max-w-[92%]">
               <span className="break-words">{current?.hanzi}</span>
               <button
-                className="text-sm px-2 py-1 rounded border active:translate-y-px active:scale-[0.98] hover:bg-black/5 transition"
+                className="text-sm px-2 py-1 btn-ghost"
                 onClick={(e) => { e.stopPropagation(); if (speaking) { try { window.speechSynthesis.cancel(); } catch {} setSpeaking(false); } else { speakCurrent(); } }}
                 aria-label={speaking ? "Stop" : (current?.hanzi ? `Play ${current.hanzi}` : "Play")}
                 title={speaking ? "Stop" : "Play"}
@@ -332,16 +343,16 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
-        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="1" onClick={() => gradeCurrent(0)}>Again</button>
-        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
-        <button className="px-3 py-2 rounded border bg-black text-white hover:opacity-90 active:translate-y-px active:scale-[0.98] transition" title="3" onClick={() => gradeCurrent(2)}>Good</button>
-        <button className="px-3 py-2 rounded border hover:bg-black/5 active:translate-y-px active:scale-[0.98] transition" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
+      <div className="grid grid-cols-4 gap-2 sm:static fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur px-4 pt-2 pb-[max(env(safe-area-inset-bottom),12px)] sm:px-0 sm:py-0 border-t sm:border-0">
+        <button className="px-3 py-2 btn-ghost" title="1" onClick={() => gradeCurrent(0)}>Again</button>
+        <button className="px-3 py-2 btn-ghost" title="2" onClick={() => gradeCurrent(1)}>Hard</button>
+        <button className="px-3 py-2 btn-ghost" title="3" onClick={() => gradeCurrent(2)}>Good</button>
+        <button className="px-3 py-2 btn-ghost" title="4" onClick={() => gradeCurrent(3)}>Easy</button>
       </div>
 
       {/* Voice controls removed; using Ting‑Ting/Chinese voice at fixed rate/pitch */}
 
-      <div className="flex items-center justify-between text-sm opacity-70">
+      <div className="flex items-center justify-between text-sm opacity-70 pb-16 sm:pb-0">
         <div>Card {effectiveQueue.length ? index + 1 : 0} / {effectiveQueue.length}</div>
         <div>Shortcuts: 1–4</div>
       </div>

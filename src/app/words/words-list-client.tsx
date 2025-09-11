@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
 
@@ -109,8 +110,8 @@ export default function WordsListClient() {
     }, delay);
   }
 
-  if (loading) return <div className="opacity-70">Loading words…</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
+  if (loading) return <div className="space-y-3"><div className="animate-pulse border rounded h-10" /><div className="animate-pulse border rounded h-24" /><div className="animate-pulse border rounded h-24" /></div>;
+  if (error) { toast.error(error); return <div className="text-red-600">{error}</div>; }
 
   return (
     <div className="mt-8 space-y-3">
@@ -119,7 +120,7 @@ export default function WordsListClient() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search Hanzi, Pinyin, English, Description"
-          className="border rounded p-2 w-full"
+          className="border input-theme p-2 w-full"
           aria-label="Search words"
         />
       </div>

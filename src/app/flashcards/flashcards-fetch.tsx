@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import FlashcardsClient from "./flashcards-client";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null; lesson?: { id: string; name: string } | { id: string; name: string }[] | null };
@@ -153,29 +154,39 @@ export default function FlashcardsFetch() {
     return [...list].sort((a, b) => (a.conversation_order ?? 0) - (b.conversation_order ?? 0));
   }, [conversations, selectedCategoryId]);
 
-  if (loading) return <div className="opacity-70">Loading flashcards…</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="animate-pulse border rounded p-3 bg-white/5 h-14" />
+        <div className="animate-pulse border rounded h-[380px] sm:h-[420px] md:h-[460px]" />
+      </div>
+    );
+  }
+  if (error) {
+    toast.error(error);
+    return <div className="text-red-600">{error}</div>;
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap p-3 border rounded bg-black/[.02]">
         <div className="flex items-center gap-2">
           <label className="text-sm">Mode:</label>
-          <select className="border rounded p-2 bg-transparent" value={mode} onChange={(e) => { const v = e.target.value as typeof mode; setMode(v); try { window.localStorage.setItem("fc-mode", v); } catch {} }}>
+          <select className="border input-theme p-2 bg-transparent" value={mode} onChange={(e) => { const v = e.target.value as typeof mode; setMode(v); try { window.localStorage.setItem("fc-mode", v); } catch {} }}>
             <option value="words">Words</option>
             <option value="conversations">Conversations</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Category:</label>
-          <select className="border rounded p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => { const v = e.target.value; setSelectedCategoryId(v); try { window.localStorage.setItem("fc-cat", v); } catch {} }}>
+          <select className="border input-theme p-2 bg-transparent" value={selectedCategoryId} onChange={(e) => { const v = e.target.value; setSelectedCategoryId(v); try { window.localStorage.setItem("fc-cat", v); } catch {} }}>
             <option value="">All</option>
             {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm">Lesson:</label>
-          <select className="border rounded p-2 bg-transparent" value={selectedLessonId} onChange={(e) => { const v = e.target.value; setSelectedLessonId(v); try { window.localStorage.setItem("fc-lesson", v); } catch {} }} disabled={mode !== "words"}>
+          <select className="border input-theme p-2 bg-transparent" value={selectedLessonId} onChange={(e) => { const v = e.target.value; setSelectedLessonId(v); try { window.localStorage.setItem("fc-lesson", v); } catch {} }} disabled={mode !== "words"}>
             <option value="">All</option>
             {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
           </select>

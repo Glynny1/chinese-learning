@@ -134,39 +134,39 @@ export function WordsForm() {
   return (
     <form onSubmit={onSubmit} className="border rounded p-4 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input className="border rounded p-2" placeholder="Hanzi" value={form.hanzi} onChange={(e) => setForm({ ...form, hanzi: e.target.value })} required />
-        <input className="border rounded p-2" placeholder="Pinyin" value={form.pinyin} onChange={(e) => setForm({ ...form, pinyin: e.target.value })} required />
-        <input className="border rounded p-2 sm:col-span-2" placeholder="English" value={form.english} onChange={(e) => setForm({ ...form, english: e.target.value })} required />
-        <textarea className="border rounded p-2 sm:col-span-2" placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <input className="border input-theme p-2" placeholder="Hanzi" value={form.hanzi} onChange={(e) => setForm({ ...form, hanzi: e.target.value })} required />
+        <input className="border input-theme p-2" placeholder="Pinyin" value={form.pinyin} onChange={(e) => setForm({ ...form, pinyin: e.target.value })} required />
+        <input className="border input-theme p-2 sm:col-span-2" placeholder="English" value={form.english} onChange={(e) => setForm({ ...form, english: e.target.value })} required />
+        <textarea className="border input-theme p-2 sm:col-span-2" placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm mb-1">Select Category</label>
-          <select className="border rounded p-2 w-full" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+          <select className="border input-theme p-2 w-full" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
             <option value="">None</option>
             {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
           <div className="mt-2 flex gap-2">
-            <input className="border rounded p-2 flex-1" placeholder="New Category" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-            <button className="px-3 py-2 rounded border" type="button" onClick={async () => { const id = await ensureCategory(); if (id) setForm((f) => ({ ...f, categoryId: id })); }} disabled={!newCategoryName.trim() || loading}>Add</button>
+            <input className="border input-theme p-2 flex-1" placeholder="New Category" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+            <button className="px-3 py-2 btn-ghost" type="button" onClick={async () => { const id = await ensureCategory(); if (id) setForm((f) => ({ ...f, categoryId: id })); }} disabled={!newCategoryName.trim() || loading}>Add</button>
           </div>
         </div>
         <div>
           <label className="block text-sm mb-1">Select Lesson</label>
-          <select className="border rounded p-2 w-full" value={form.lessonId} onChange={(e) => setForm({ ...form, lessonId: e.target.value })}>
+          <select className="border input-theme p-2 w-full" value={form.lessonId} onChange={(e) => setForm({ ...form, lessonId: e.target.value })}>
             <option value="">None</option>
             {lessons.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
           </select>
           <div className="mt-2 flex gap-2">
-            <input className="border rounded p-2 flex-1" placeholder="New Lesson" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} />
-            <button className="px-3 py-2 rounded border" type="button" onClick={async () => { const id = await ensureLesson(); if (id) setForm((f) => ({ ...f, lessonId: id })); }} disabled={!newLessonName.trim() || loading}>Add</button>
+            <input className="border input-theme p-2 flex-1" placeholder="New Lesson" value={newLessonName} onChange={(e) => setNewLessonName(e.target.value)} />
+            <button className="px-3 py-2 btn-ghost" type="button" onClick={async () => { const id = await ensureLesson(); if (id) setForm((f) => ({ ...f, lessonId: id })); }} disabled={!newLessonName.trim() || loading}>Add</button>
           </div>
         </div>
       </div>
 
       {error && <div className="text-red-600 text-sm">{error}</div>}
-      <button className="px-4 py-2 rounded bg-black text-white disabled:opacity-60" disabled={loading}>
+      <button className="px-4 py-2 btn-primary disabled:opacity-60" disabled={loading}>
         {loading ? "Adding..." : "Add Word"}
       </button>
     </form>

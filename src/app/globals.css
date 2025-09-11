@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --accent: #10b981; /* emerald-500 */
+  --accent-600: #059669; /* emerald-600 */
+  --radius: 10px;
+  --shadow: 0 6px 20px rgba(0,0,0,.18);
 }
 
 @theme inline {
@@ -16,6 +20,7 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
   }
 }
 
@@ -24,3 +29,29 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Theme helpers */
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, background .12s ease, opacity .12s ease;
+}
+.btn-primary:hover { background: var(--accent-600); }
+.btn-primary:active { transform: translateY(1px) scale(.98); }
+
+.btn-ghost {
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: var(--radius);
+  transition: background .12s ease, transform .12s ease;
+}
+.btn-ghost:hover { background: rgba(255,255,255,.06); }
+.btn-ghost:active { transform: translateY(1px) scale(.98); }
+
+.input-theme {
+  border-radius: var(--radius);
+  background: transparent;
+  transition: box-shadow .12s ease;
+}
+.input-theme:focus { outline: none; box-shadow: 0 0 0 2px var(--accent); }
