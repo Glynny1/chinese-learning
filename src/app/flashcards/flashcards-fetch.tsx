@@ -13,7 +13,7 @@ export default function FlashcardsFetch() {
   const [words, setWords] = useState<Word[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  // lessons removed
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("fc-cat") || "";
@@ -73,7 +73,7 @@ export default function FlashcardsFetch() {
             }
             setCategories(Array.from(cats.values()));
           }
-          setLessons([]);
+          // lessons removed
         }
       } catch (e) {
         if (isMounted) setError(e instanceof Error ? e.message : "Failed to load");

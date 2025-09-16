@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 const OWNER_USER_ID = process.env.NEXT_PUBLIC_OWNER_USER_ID || process.env.OWNER_USER_ID || "";
 
 type Category = { id: string; name: string };
-type Lesson = { id: string; name: string };
+// lessons removed
 
 export function WordsForm() {
   const router = useRouter();
@@ -16,7 +16,7 @@ export function WordsForm() {
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [lessons] = useState<Lesson[]>([]);
+  // lessons removed
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
@@ -67,7 +67,7 @@ export function WordsForm() {
     return null;
   }
 
-  async function ensureLesson(): Promise<string | null> { return null; }
+  // lessons removed
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -9,7 +9,7 @@ const OWNER_USER_ID = process.env.NEXT_PUBLIC_OWNER_USER_ID || "";
 
 type Row = { hanzi: string; pinyin: string; english: string; description?: string; categoryName?: string; lessonName?: string };
 type Category = { id: string; name: string };
-type Lesson = { id: string; name: string };
+// lessons removed
 
 export default function ImportPage() {
   const router = useRouter();
@@ -22,7 +22,6 @@ export default function ImportPage() {
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  
   const [categoryId, setCategoryId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [isOwner, setIsOwner] = useState(false);
@@ -115,11 +114,7 @@ export default function ImportPage() {
       if (id) categoryNameToId.set(name, id);
     }
 
-    const lessonNameToId = new Map<string, string>();
-    for (const name of uniqueLessonNames) {
-      const id = await ensureLessonByName(name);
-      if (id) lessonNameToId.set(name, id);
-    }
+    // lessons removed
 
     for (const row of rows) {
       const hanzi = row.hanzi?.trim();

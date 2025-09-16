@@ -6,7 +6,7 @@ import textToSpeech from "@google-cloud/text-to-speech";
 
 function getClient() {
   const rawJson = process.env.GOOGLE_TTS_CREDENTIALS_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  let credentials: any | null = null;
+  let credentials: Record<string, unknown> | null = null;
   if (rawJson && rawJson.trim().startsWith("{")) {
     credentials = JSON.parse(rawJson);
   } else {
@@ -15,7 +15,7 @@ function getClient() {
     const json = Buffer.from(b64, "base64").toString("utf8");
     credentials = JSON.parse(json);
   }
-  const client = new textToSpeech.TextToSpeechClient({ credentials });
+  const client = new textToSpeech.TextToSpeechClient({ credentials: credentials ?? undefined });
   return client;
 }
 
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
         {
           input: { text },
           voice: name ? { name } : { languageCode },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           audioConfig: { audioEncoding: audioEncoding as any, speakingRate, pitch },
         },
         { timeout: 12000 }
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
       } else {
         [res] = await synth(lang);
       }
-    } catch (e) {
+    } catch {
       try {
         [res] = await synth(lang);
       } catch (err2) {
@@ -64,10 +65,10 @@ export async function POST(req: NextRequest) {
     });
     return new NextResponse(audio, { status: 200, headers });
   } catch (e) {
-    const err = e as any;
-    const msg = err?.message || "unknown";
-    const code = err?.code || err?.cause?.code || "";
-    const details = err?.response?.data || undefined;
+    const err = e as unknown as Record<string, unknown>;
+    const msg = (err && typeof err.message === "string" ? err.message : "unknown") as string;
+    const code = (err && (err as any)?.code) || (err && (err as any)?.cause?.code) || "";
+    const details = (err && (err as any)?.response?.data) || undefined;
     return NextResponse.json({ error: msg, code, details }, { status: 500 });
   }
 }

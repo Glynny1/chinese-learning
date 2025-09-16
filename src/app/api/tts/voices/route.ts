@@ -3,14 +3,14 @@ import textToSpeech from "@google-cloud/text-to-speech";
 
 function getClient() {
   const rawJson = process.env.GOOGLE_TTS_CREDENTIALS_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  let credentials: any | null = null;
+  let credentials: Record<string, unknown> | null = null;
   if (rawJson && rawJson.trim().startsWith("{")) credentials = JSON.parse(rawJson);
   else {
     const b64 = process.env.GOOGLE_TTS_CREDENTIALS_B64 || process.env.GOOGLE_APPLICATION_CREDENTIALS_B64 || "";
     if (!b64) throw new Error("Missing GOOGLE_TTS_CREDENTIALS_B64");
     credentials = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
   }
-  return new textToSpeech.TextToSpeechClient({ credentials });
+  return new textToSpeech.TextToSpeechClient({ credentials: credentials ?? undefined });
 }
 
 export async function GET() {
