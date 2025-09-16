@@ -30,6 +30,7 @@ export default function FlashcardsFetch() {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("fc-listen") === "1";
   });
+  // TTS settings fixed; no UI or persistence
 
   useEffect(() => {
     let isMounted = true;
@@ -111,6 +112,14 @@ export default function FlashcardsFetch() {
   useEffect(() => {
     try { window.localStorage.setItem("fc-listen", listeningOnly ? "1" : "0"); } catch {}
   }, [listeningOnly]);
+  // No tts voice/rate persistence
+
+  // Removed voice list fetch; using Google default zh-CN voice
+
+  // Notify error changes (must be outside of render branches to keep Hooks order stable)
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
 
   // Ensure keys exist even before first change (set current state as defaults)
   useEffect(() => {
@@ -196,10 +205,7 @@ export default function FlashcardsFetch() {
       </div>
     );
   }
-  if (error) {
-    toast.error(error);
-    return <div className="text-red-600">{error}</div>;
-  }
+  if (error) { return <div className="text-red-600">{error}</div>; }
 
   return (
     <div className="space-y-5">
@@ -224,7 +230,8 @@ export default function FlashcardsFetch() {
           <input type="checkbox" checked={listeningOnly} onChange={(e) => setListeningOnly(e.target.checked)} />
           Listening only
         </label>
-        <button className="ml-auto px-3 py-1 rounded border text-sm hover:bg-black/5" onClick={resetSession}>Reset</button>
+        {/* TTS controls removed (fixed defaults) */}
+        <button className="px-3 py-1 rounded border text-sm hover:bg-black/5" onClick={resetSession}>Reset</button>
       </div>
 
       {mode === "words" ? (

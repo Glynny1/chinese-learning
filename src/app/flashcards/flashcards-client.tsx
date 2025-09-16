@@ -111,6 +111,8 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
   const [correct, setCorrect] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const lastSpokenRef = useRef<string | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAudioUrlRef = useRef<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   useEffect(() => {
@@ -185,6 +187,33 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     trackTouch: true,
     trackMouse: false,
   });
+
+  function getTtsRate(): number { return 0.8; }
+  function getTtsVoice(): string | undefined { return undefined; }
+
+  async function requestTtsBlob(text: string, lang: string = "zh-CN", attempts: number = 2, timeoutMs: number = 8000, rate?: number, voice?: string): Promise<Blob> {
+    let lastErr: unknown = null;
+    for (let i = 0; i < attempts; i++) {
+      const ac = new AbortController();
+      const to = setTimeout(() => ac.abort(), timeoutMs);
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, lang, rate, voice }),
+          signal: ac.signal,
+        });
+        clearTimeout(to);
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        return await res.blob();
+      } catch (e) {
+        clearTimeout(to);
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error("tts failed");
+  }
 
   // Persist index whenever it changes in conversations mode
   useEffect(() => {
@@ -262,25 +291,57 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
   function speakCurrent() {
     const text = current?.hanzi?.trim();
     if (!text) return;
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    // If something is already playing (Audio), stop it first
+    try {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      }
+      if (currentAudioUrlRef.current) {
+        URL.revokeObjectURL(currentAudioUrlRef.current);
+        currentAudioUrlRef.current = null;
+      }
+    } catch {}
     setSpeaking(true);
     lastSpokenRef.current = text;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "zh-CN";
-    u.rate = 0.7;
-    u.pitch = 1.0;
-    const v = chooseZhVoice();
-    if (v) u.voice = v;
-    try { window.speechSynthesis.resume(); } catch {}
-    u.onend = () => setSpeaking(false);
-    u.onerror = () => setSpeaking(false);
-    if (window.speechSynthesis.speaking) {
-      try { window.speechSynthesis.cancel(); } catch {}
-    }
-    const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch {}
-    }, delay);
+    // Try server TTS first
+    (async () => {
+      try {
+        const rate = getTtsRate();
+        const voice = getTtsVoice();
+        const blob = await requestTtsBlob(text, "zh-CN", 2, 8000, rate, voice);
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        currentAudioRef.current = audio;
+        currentAudioUrlRef.current = url;
+        try { audio.playbackRate = rate; } catch {}
+        audio.onended = () => { setSpeaking(false); try { URL.revokeObjectURL(url); } catch {}; if (currentAudioRef.current === audio) { currentAudioRef.current = null; currentAudioUrlRef.current = null; } };
+        audio.onerror = () => { setSpeaking(false); try { URL.revokeObjectURL(url); } catch {}; if (currentAudioRef.current === audio) { currentAudioRef.current = null; currentAudioUrlRef.current = null; } };
+        await audio.play();
+        return;
+      } catch {
+        // Fallback to browser TTS
+        try {
+          if (typeof window === "undefined" || !("speechSynthesis" in window)) { setSpeaking(false); return; }
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = "zh-CN";
+          u.rate = 0.7;
+          u.pitch = 1.0;
+          const v = chooseZhVoice();
+          if (v) u.voice = v;
+          try { window.speechSynthesis.resume(); } catch {}
+          u.onend = () => setSpeaking(false);
+          u.onerror = () => setSpeaking(false);
+          if (window.speechSynthesis.speaking) {
+            try { window.speechSynthesis.cancel(); } catch {}
+          }
+          const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
+          setTimeout(() => {
+            try { window.speechSynthesis.speak(u); } catch { setSpeaking(false); }
+          }, delay);
+        } catch { setSpeaking(false); }
+      }
+    })();
   }
 
   const dueCount = useMemo(() => {
@@ -321,7 +382,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
               {!listeningOnly && <span className="break-words">{current?.hanzi}</span>}
               <button
                 className="text-sm px-2 py-1 btn-ghost"
-                onClick={(e) => { e.stopPropagation(); if (speaking) { try { window.speechSynthesis.cancel(); } catch {} setSpeaking(false); } else { speakCurrent(); } }}
+                onClick={(e) => { e.stopPropagation(); if (speaking) { try { if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.currentTime = 0; } } catch {}; try { if (currentAudioUrlRef.current) { URL.revokeObjectURL(currentAudioUrlRef.current); currentAudioUrlRef.current = null; } } catch {}; try { window.speechSynthesis.cancel(); } catch {}; setSpeaking(false); } else { speakCurrent(); } }}
                 aria-label={speaking ? "Stop" : (current?.hanzi ? `Play ${current.hanzi}` : "Play")}
                 title={speaking ? "Stop" : "Play"}
               >

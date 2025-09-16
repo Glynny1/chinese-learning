@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
@@ -12,6 +12,8 @@ export default function WordsListClient() {
   const [query, setQuery] = useState("");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAudioUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -81,6 +83,33 @@ export default function WordsListClient() {
     return words.filter((w) => matches(w, query));
   }, [words, query, matches]);
 
+  function getTtsRate(): number { return 0.8; }
+  function getTtsVoice(): string | undefined { return undefined; }
+
+  async function requestTtsBlob(text: string, lang: string = "zh-CN", attempts: number = 2, timeoutMs: number = 8000, rate?: number, voice?: string): Promise<Blob> {
+    let lastErr: unknown = null;
+    for (let i = 0; i < attempts; i++) {
+      const ac = new AbortController();
+      const to = setTimeout(() => ac.abort(), timeoutMs);
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, lang, rate, voice }),
+          signal: ac.signal,
+        });
+        clearTimeout(to);
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        return await res.blob();
+      } catch (e) {
+        clearTimeout(to);
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error("tts failed");
+  }
+
   function chooseZhVoice(): SpeechSynthesisVoice | null {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
     const v = voices.length ? voices : window.speechSynthesis.getVoices();
@@ -90,24 +119,46 @@ export default function WordsListClient() {
   }
 
   function speakHanzi(text: string, id: string) {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     setSpeakingId(id);
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "zh-CN";
-    u.rate = 0.7;
-    u.pitch = 1.0;
-    const v = chooseZhVoice();
-    if (v) u.voice = v;
-    try { window.speechSynthesis.resume(); } catch {}
-    u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
-    u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
-    if (window.speechSynthesis.speaking) {
-      try { window.speechSynthesis.cancel(); } catch {}
-    }
-    const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(u); } catch {}
-    }, delay);
+    (async () => {
+      try {
+        // stop any current audio first
+        try {
+          if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.currentTime = 0; }
+          if (currentAudioUrlRef.current) { URL.revokeObjectURL(currentAudioUrlRef.current); currentAudioUrlRef.current = null; }
+        } catch {}
+        const rate = getTtsRate();
+        const voice = getTtsVoice();
+        const blob = await requestTtsBlob(text, "zh-CN", 2, 8000, rate, voice);
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        currentAudioRef.current = audio;
+        currentAudioUrlRef.current = url;
+        try { audio.playbackRate = rate; } catch {}
+        audio.onended = () => { setSpeakingId((cur) => (cur === id ? null : cur)); try { URL.revokeObjectURL(url); } catch {}; if (currentAudioRef.current === audio) { currentAudioRef.current = null; currentAudioUrlRef.current = null; } };
+        audio.onerror = () => { setSpeakingId((cur) => (cur === id ? null : cur)); try { URL.revokeObjectURL(url); } catch {}; if (currentAudioRef.current === audio) { currentAudioRef.current = null; currentAudioUrlRef.current = null; } };
+        await audio.play();
+        return;
+      } catch {}
+      // Fallback
+      try {
+        if (typeof window === "undefined" || !("speechSynthesis" in window)) { setSpeakingId(null); return; }
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "zh-CN";
+        const v = chooseZhVoice();
+        if (v) u.voice = v;
+        try { window.speechSynthesis.resume(); } catch {}
+        u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
+        u.onerror = () => setSpeakingId((cur) => (cur === id ? null : cur));
+        if (window.speechSynthesis.speaking) {
+          try { window.speechSynthesis.cancel(); } catch {}
+        }
+        const delay = (window.speechSynthesis.getVoices().length > 0) ? 0 : 200;
+        setTimeout(() => {
+          try { window.speechSynthesis.speak(u); } catch { setSpeakingId(null); }
+        }, delay);
+      } catch { setSpeakingId(null); }
+    })();
   }
 
   if (loading) return <div className="space-y-3"><div className="animate-pulse border rounded h-10" /><div className="animate-pulse border rounded h-24" /><div className="animate-pulse border rounded h-24" /></div>;
