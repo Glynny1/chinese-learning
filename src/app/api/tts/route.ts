@@ -65,10 +65,23 @@ export async function POST(req: NextRequest) {
     });
     return new NextResponse(audio, { status: 200, headers });
   } catch (e) {
-    const err = e as unknown as Record<string, unknown>;
-    const msg = (err && typeof err.message === "string" ? err.message : "unknown") as string;
-    const code = (err && (err as any)?.code) || (err && (err as any)?.cause?.code) || "";
-    const details = (err && (err as any)?.response?.data) || undefined;
+    const raw: unknown = e;
+    let msg = "unknown";
+    let code = "";
+    let details: unknown = undefined;
+    if (typeof raw === "object" && raw !== null) {
+      const er = raw as { message?: unknown; code?: unknown; cause?: unknown; response?: unknown };
+      if (typeof er.message === "string") msg = er.message;
+      if (typeof er.code === "string") code = er.code;
+      if (er.cause && typeof er.cause === "object") {
+        const cause = er.cause as { code?: unknown };
+        if (typeof cause.code === "string") code = cause.code;
+      }
+      if (er.response && typeof er.response === "object") {
+        const resp = er.response as { data?: unknown };
+        if (typeof resp.data !== "undefined") details = resp.data;
+      }
+    }
     return NextResponse.json({ error: msg, code, details }, { status: 500 });
   }
 }

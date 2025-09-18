@@ -75,7 +75,7 @@ export default function ImportPage() {
     return null;
   }
 
-  async function ensureLessonByName(name: string): Promise<string | null> { return null; }
+  // lessons removed
 
   async function ensureCategory(): Promise<string | null> {
     if (!newCategoryName.trim()) return categoryId || null;
@@ -97,15 +97,12 @@ export default function ImportPage() {
       defaultCategoryId = await ensureCategory();
     }
 
-    const defaultLessonId: string | null = null;
+    // lessons removed
 
     const uniqueCategoryNames = new Set<string>();
-    const uniqueLessonNames = new Set<string>();
     for (const r of rows) {
       const c = (r.categoryName || "").trim();
-      const l = (r.lessonName || "").trim();
       if (c) uniqueCategoryNames.add(c);
-      if (l) uniqueLessonNames.add(l);
     }
 
     const categoryNameToId = new Map<string, string>();
