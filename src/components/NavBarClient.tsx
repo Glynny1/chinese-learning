@@ -33,6 +33,7 @@ export default function NavBarClient() {
           <Link href="/" className="font-semibold tracking-tight hover:opacity-80 transition">Chinese Learning</Link>
           <Link href="/words" className="px-2 py-1 rounded hover:bg-black/5 transition">Words</Link>
           <Link href="/flashcards" className="px-2 py-1 rounded hover:bg-black/5 transition">Flashcards</Link>
+          <Link href="/stats" className="px-2 py-1 rounded hover:bg-black/5 transition">Stats</Link>
           {isOwner ? <Link href="/import" className="px-2 py-1 rounded hover:bg-black/5 transition">Import</Link> : null}
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
