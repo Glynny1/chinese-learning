@@ -238,15 +238,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
 
   function gradeCurrent(grade: Grade) {
     if (!current) return;
-    // Fire-and-forget: log review server-side for authenticated users
-    try {
-      fetch("/api/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: current.id, mode, grade, categoryId: (current as any).category_id || (Array.isArray((current as any).category) ? (current as any).category?.[0]?.id : (current as any).category?.id) || null }),
-        credentials: "include",
-      }).catch(() => {});
-    } catch {}
+    // Removed server logging per request
     if (mode === "conversations") {
       // Linear progression: always move to the next card in order
       setReviewed((r) => r + 1);

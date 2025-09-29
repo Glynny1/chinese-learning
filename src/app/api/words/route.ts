@@ -8,7 +8,7 @@ export async function GET() {
   if (!OWNER_USER_ID) return NextResponse.json({ words: [] });
   const { data, error } = await supabase
     .from("words")
-    .select("id, hanzi, pinyin, english, description, sentence, category_id, category:categories!words_category_id_fkey(id, name)")
+    .select("id, hanzi, pinyin, english, description, category_id, category:categories!words_category_id_fkey(id, name)")
     .eq("user_id", OWNER_USER_ID)
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
