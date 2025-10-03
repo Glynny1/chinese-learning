@@ -28,9 +28,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="max-w-5xl mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-4">
           <NavBarClient />
-          <div className="py-6">{children}</div>
+          <div className="py-6 px-0">{children}</div>
         </div>
         <Toaster position="top-right" toastOptions={{
           style: { borderRadius: '10px' },

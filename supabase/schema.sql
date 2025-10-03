@@ -44,3 +44,15 @@ CREATE TABLE public.words (
   CONSTRAINT words_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.lessons(id),
   CONSTRAINT words_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
 );
+
+-- Track per-user flagged cards (Again/Hard)
+CREATE TABLE public.review_flags (
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  word_id uuid NOT NULL REFERENCES public.words(id) ON DELETE CASCADE,
+  flag text NOT NULL CHECK (flag IN ('again','hard')),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT review_flags_user_word_unique UNIQUE (user_id, word_id)
+);
+
+CREATE INDEX review_flags_user_id_idx ON public.review_flags(user_id);
+CREATE INDEX review_flags_word_id_idx ON public.review_flags(word_id);

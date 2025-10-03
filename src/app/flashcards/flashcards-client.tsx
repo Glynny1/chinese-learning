@@ -114,6 +114,9 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentAudioUrlRef = useRef<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [flagged, setFlagged] = useState<Record<string, { flag: "again" | "hard"; hanzi: string; pinyin: string; english: string }>>({});
+  const [canSyncFlags, setCanSyncFlags] = useState<boolean>(true);
+  const [overrideWord, setOverrideWord] = useState<Word | null>(null);
 
   useEffect(() => {
     setStore(loadStore());
@@ -176,7 +179,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     }
   }, [effectiveQueue.length, mode, resumeKey]);
 
-  const current: Word | null = effectiveQueue[index] ?? null;
+  const current: Word | null = overrideWord ?? (effectiveQueue[index] ?? null);
 
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => gradeCurrent(1), // Hard
@@ -224,6 +227,45 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     } catch {}
   }, [index, mode, resumeKey]);
 
+  // Load flagged (Again/Hard) items per user
+  useEffect(() => {
+    if (mode !== "words") return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/reviews", { cache: "no-store" });
+        if (!res.ok) {
+          if (res.status === 401) setCanSyncFlags(false);
+          return;
+        }
+        const json: { flags?: Array<{ word_id: string; flag: "again" | "hard"; words?: { id: string; hanzi: string; pinyin: string; english: string } }> } = await res.json();
+        if (!active) return;
+        const map: Record<string, { flag: "again" | "hard"; hanzi: string; pinyin: string; english: string }> = {};
+        for (const r of json.flags || []) {
+          const w = r.words || { id: r.word_id, hanzi: "", pinyin: "", english: "" };
+          map[r.word_id] = { flag: r.flag, hanzi: w.hanzi || "", pinyin: w.pinyin || "", english: w.english || "" };
+        }
+        setFlagged(map);
+        setCanSyncFlags(true);
+      } catch {
+        setCanSyncFlags(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [mode]);
+
+  async function syncFlagFor(wordId: string, grade: Grade) {
+    if (!canSyncFlags || mode !== "words") return;
+    try {
+      if (grade === 0 || grade === 1) {
+        const flag = grade === 0 ? "again" : "hard" as const;
+        await fetch("/api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ word_id: wordId, flag }) });
+      } else {
+        await fetch("/api/reviews", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ word_id: wordId }) });
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "1") gradeCurrent(0);
@@ -262,6 +304,30 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     saveStore(prev);
     setStore(prev);
 
+    // Update flagged list (Again/Hard add; Good/Easy remove)
+    if (mode === "words") {
+      if (grade === 0 || grade === 1) {
+        const f = grade === 0 ? "again" : "hard";
+        setFlagged((m) => ({
+          ...m,
+          [current.id]: {
+            flag: f,
+            hanzi: current.hanzi,
+            pinyin: current.pinyin,
+            english: current.english,
+          },
+        }));
+      } else {
+        setFlagged((m) => {
+          if (!m[current.id]) return m;
+          const c = { ...m };
+          delete c[current.id];
+          return c;
+        });
+      }
+      void syncFlagFor(current.id, grade);
+    }
+
     setReviewed((r) => r + 1);
     if (grade >= 2) setCorrect((c) => c + 1);
 
@@ -272,6 +338,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
       setIndex((i) => (i + 1) % effectiveQueue.length);
       setShowAnswer(false);
     }
+    setOverrideWord(null);
     // Persist index after moving
     try {
       if (resumeKey && typeof window !== "undefined") {
@@ -368,11 +435,12 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
         )}
       </div>
 
-      <div className="[perspective:1000px]" {...swipeHandlers}>
-        <div
-          className={`relative h-[380px] sm:h-[420px] md:h-[460px] w-full transition-transform duration-500 [transform-style:preserve-3d] ${showAnswer ? "[transform:rotateY(180deg)]" : ""}`}
-          onClick={() => setShowAnswer((s) => !s)}
-        >
+      <div className="grid gap-6 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px]">
+        <div className="[perspective:1000px]" {...swipeHandlers}>
+          <div
+            className={`relative h-[320px] sm:h-[360px] md:h-[min(50vh,400px)] lg:h-[min(52vh,440px)] xl:h-[min(54vh,480px)] w-full transition-transform duration-500 [transform-style:preserve-3d] ${showAnswer ? "[transform:rotateY(180deg)]" : ""}`}
+            onClick={() => setShowAnswer((s) => !s)}
+          >
           <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] overflow-hidden">
             <div className="h-6 mb-2">
               {mode === "conversations" && current?.type ? (
@@ -408,7 +476,43 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
               </>
             )}
           </div>
+          </div>
         </div>
+
+        {mode === "words" ? (
+          <aside className="hidden md:block border rounded p-3 md:h-[min(50vh,400px)] lg:h-[min(52vh,440px)] xl:h-[min(54vh,480px)] overflow-auto">
+            <div className="text-sm font-medium mb-2">Review Later</div>
+            {canSyncFlags ? (
+              Object.keys(flagged).length > 0 ? (
+                <ul className="space-y-1">
+                  {Object.entries(flagged).map(([id, f]) => (
+                    <li key={id}>
+                      <button
+                        className="w-full text-left text-sm px-2 py-1 rounded border flex items-center justify-between gap-2 hover:bg-black/5 hover:shadow-sm transition-transform duration-150 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-black/10"
+                        onClick={() => {
+                          const found = words.find((w) => w.id === id);
+                          const w: Word = found || { id, hanzi: f.hanzi, pinyin: f.pinyin, english: f.english, description: null, type: null } as Word;
+                          setOverrideWord(w);
+                          setShowAnswer(false);
+                        }}
+                      >
+                        <span className="truncate">
+                          {f.hanzi || "(card)"}
+                          <span className="opacity-70 ml-2">{f.pinyin}</span>
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${f.flag === "again" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}`}>{f.flag}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-xs opacity-70">No cards flagged as Again/Hard.</div>
+              )
+            ) : (
+              <div className="text-xs opacity-70">Please Login via Google to track Harder cards</div>
+            )}
+          </aside>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-4 gap-2 sm:static fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur px-4 pt-2 pb-[max(env(safe-area-inset-bottom),12px)] sm:px-0 sm:py-0 border-t sm:border-0">
@@ -424,6 +528,6 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
         <div>Card {effectiveQueue.length ? index + 1 : 0} / {effectiveQueue.length}</div>
         <div>Shortcuts: 1–4</div>
       </div>
-    </div>
+      </div>
   );
 }

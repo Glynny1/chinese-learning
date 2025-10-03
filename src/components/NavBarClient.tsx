@@ -28,7 +28,7 @@ export default function NavBarClient() {
 
   return (
     <nav className="sticky top-0 z-50 w-full backdrop-blur supports-[backdrop-filter]:bg-background/70 bg-background/90 border-b">
-      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex gap-3 sm:gap-4 items-center">
           <Link href="/" className="font-semibold tracking-tight hover:opacity-80 transition">Chinese Learning</Link>
           <Link href="/words" className="px-2 py-1 rounded hover:bg-black/5 transition">Words</Link>
