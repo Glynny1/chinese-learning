@@ -56,3 +56,19 @@ CREATE TABLE public.review_flags (
 
 CREATE INDEX review_flags_user_id_idx ON public.review_flags(user_id);
 CREATE INDEX review_flags_word_id_idx ON public.review_flags(word_id);
+
+-- Per-user spaced repetition state for words
+CREATE TABLE public.review_srs (
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  word_id uuid NOT NULL REFERENCES public.words(id) ON DELETE CASCADE,
+  repetitions integer NOT NULL DEFAULT 0,
+  ease numeric NOT NULL DEFAULT 2.5,
+  interval_days integer NOT NULL DEFAULT 0,
+  due_at timestamp with time zone NOT NULL DEFAULT now(),
+  last_grade smallint,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT review_srs_user_word_unique UNIQUE (user_id, word_id)
+);
+
+CREATE INDEX review_srs_user_id_idx ON public.review_srs(user_id);
+CREATE INDEX review_srs_due_at_idx ON public.review_srs(due_at);

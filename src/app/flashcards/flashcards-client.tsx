@@ -51,6 +51,39 @@ function saveStore(store: SrsStore): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
+// Remote SRS sync helpers (logged-in users)
+type SrsRow = {
+  word_id: string;
+  repetitions: number;
+  ease: number;
+  interval_days: number;
+  due_at: string;
+  last_grade: number | null;
+};
+
+function fromRow(row: SrsRow): CardState {
+  return {
+    repetitions: row.repetitions || 0,
+    ease: row.ease || INITIAL_EASE,
+    interval: row.interval_days || 0,
+    dueAt: row.due_at,
+    lastGrade: (row.last_grade === 0 || row.last_grade === 1 || row.last_grade === 2 || row.last_grade === 3)
+      ? (row.last_grade as Grade)
+      : null,
+  };
+}
+
+function toRow(wordId: string, state: CardState): SrsRow {
+  return {
+    word_id: wordId,
+    repetitions: state.repetitions,
+    ease: state.ease,
+    interval_days: state.interval,
+    due_at: state.dueAt,
+    last_grade: state.lastGrade ?? null,
+  };
+}
+
 function scheduleNext(current: CardState | undefined, grade: Grade): CardState {
   const now = new Date();
   const base: CardState = current ?? {
@@ -117,6 +150,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
   const [flagged, setFlagged] = useState<Record<string, { flag: "again" | "hard"; hanzi: string; pinyin: string; english: string }>>({});
   const [canSyncFlags, setCanSyncFlags] = useState<boolean>(true);
   const [overrideWord, setOverrideWord] = useState<Word | null>(null);
+  const [canSyncSrs, setCanSyncSrs] = useState<boolean>(true);
 
   useEffect(() => {
     setStore(loadStore());
@@ -266,6 +300,51 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     } catch {}
   }
 
+  // Load remote SRS for logged-in users and merge with local (server wins)
+  useEffect(() => {
+    if (mode !== "words") return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/srs", { cache: "no-store" });
+        if (!res.ok) {
+          if (res.status === 401) setCanSyncSrs(false);
+          return;
+        }
+        const json: { srs?: SrsRow[] } = await res.json();
+        if (!active) return;
+        const serverPerCard: Record<string, CardState> = {};
+        for (const r of json.srs || []) {
+          serverPerCard[r.word_id] = fromRow(r);
+        }
+        // Merge with local store; server overrides overlapping keys
+        const local = loadStore();
+        const merged: SrsStore = {
+          perCard: { ...local.perCard, ...serverPerCard },
+          daily: local.daily,
+        };
+        saveStore(merged);
+        setStore(merged);
+        setCanSyncSrs(true);
+      } catch {
+        setCanSyncSrs(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [mode]);
+
+  async function upsertSrs(wordId: string, state: CardState) {
+    if (!canSyncSrs || mode !== "words") return;
+    try {
+      const body = { srs: [toRow(wordId, state)] };
+      await fetch("/api/srs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {}
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "1") gradeCurrent(0);
@@ -327,6 +406,9 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
       }
       void syncFlagFor(current.id, grade);
     }
+
+    // Upsert SRS remotely (logged-in users)
+    void upsertSrs(current.id, nextState);
 
     setReviewed((r) => r + 1);
     if (grade >= 2) setCorrect((c) => c + 1);
