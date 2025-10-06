@@ -6,6 +6,7 @@ import FlashcardsClient from "./flashcards-client";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category?: { id: string; name: string } | null };
 type Conversation = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category_id: string | null; conversation_order: number; type?: string | null };
+type Sentence = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; category_id: string | null };
 type Category = { id: string; name: string };
 // lessons removed
 
@@ -13,16 +14,18 @@ export default function FlashcardsFetch() {
   const [words, setWords] = useState<Word[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [sentences, setSentences] = useState<Sentence[]>([]);
   // lessons removed
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem("fc-cat") || "";
   }); // empty = All
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
-  const [mode, setMode] = useState<"words" | "conversations">(() => {
+  type Mode = "words" | "conversations" | "sentences";
+  const [mode, setMode] = useState<Mode>(() => {
     if (typeof window === "undefined") return "words";
     const m = window.localStorage.getItem("fc-mode");
-    return (m === "conversations" || m === "words") ? (m as "words" | "conversations") : "words";
+    return (m === "conversations" || m === "words" || m === "sentences") ? (m as Mode) : "words";
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,17 +39,20 @@ export default function FlashcardsFetch() {
     let isMounted = true;
     async function load() {
       try {
-        const [wr, cr, gr] = await Promise.all([
+        const [wr, cr, sr, gr] = await Promise.all([
           fetch("/api/words", { cache: "no-store" }),
           fetch("/api/conversations", { cache: "no-store" }),
+          fetch("/api/sentences", { cache: "no-store" }),
           fetch("/api/categories", { cache: "no-store" }),
         ]);
         if (!wr.ok) throw new Error(`Words failed: ${wr.status}`);
         // lessons may be empty; don't throw on lr failure, just derive from words
         const jw: { words?: Array<Word> } = await wr.json();
         let jc: { conversations?: Array<Conversation> } = { conversations: [] };
+        let js: { sentences?: Array<Sentence> } = { sentences: [] };
         let jg: { categories?: Array<Category> } = { categories: [] };
         try { if (cr.ok) jc = await cr.json(); } catch {}
+        try { if (sr.ok) js = await sr.json(); } catch {}
         try { if (gr.ok) jg = await gr.json(); } catch {}
 
         if (isMounted) {
@@ -57,6 +63,7 @@ export default function FlashcardsFetch() {
           const cs = (jc.conversations ?? []) as Conversation[];
           setWords(ws);
           setConversations(cs);
+          setSentences(js.sentences ?? []);
           // Prefer categories from API table; fall back to deriving from data if empty
           if (jg.categories && jg.categories.length > 0) {
             setCategories(jg.categories);
@@ -89,7 +96,7 @@ export default function FlashcardsFetch() {
   useEffect(() => {
     try {
       const m = window.localStorage.getItem("fc-mode");
-      if (m === "conversations" || m === "words") setMode(m as "words" | "conversations");
+      if (m === "conversations" || m === "words" || m === "sentences") setMode(m as Mode);
       const c = window.localStorage.getItem("fc-cat");
       if (typeof c === "string") setSelectedCategoryId(c);
       const l = window.localStorage.getItem("fc-lesson");
@@ -182,20 +189,29 @@ export default function FlashcardsFetch() {
     return ids;
   }, [conversations]);
 
+  const availableCategoryIdsForSentences = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of sentences) {
+      const cid = s.category_id || undefined;
+      if (cid) ids.add(cid);
+    }
+    return ids;
+  }, [sentences]);
+
   const visibleCategories = useMemo(() => {
-    const allow = mode === "words" ? availableCategoryIdsForWords : availableCategoryIdsForConversations;
+    const allow = mode === "words" ? availableCategoryIdsForWords : (mode === "conversations" ? availableCategoryIdsForConversations : availableCategoryIdsForSentences);
     // If no categories are available yet (e.g., empty dataset), fall back to all categories
     if (allow.size === 0) return categories;
     return categories.filter((c) => allow.has(c.id));
-  }, [categories, mode, availableCategoryIdsForWords, availableCategoryIdsForConversations]);
+  }, [categories, mode, availableCategoryIdsForWords, availableCategoryIdsForConversations, availableCategoryIdsForSentences]);
 
   // If current selection isn't available in the current mode, reset to All
   useEffect(() => {
-    const allow = mode === "words" ? availableCategoryIdsForWords : availableCategoryIdsForConversations;
+    const allow = mode === "words" ? availableCategoryIdsForWords : (mode === "conversations" ? availableCategoryIdsForConversations : availableCategoryIdsForSentences);
     if (selectedCategoryId && !allow.has(selectedCategoryId)) {
       setSelectedCategoryId("");
     }
-  }, [mode, selectedCategoryId, availableCategoryIdsForWords, availableCategoryIdsForConversations]);
+  }, [mode, selectedCategoryId, availableCategoryIdsForWords, availableCategoryIdsForConversations, availableCategoryIdsForSentences]);
 
   if (loading) {
     return (
@@ -215,6 +231,7 @@ export default function FlashcardsFetch() {
           <select className="border input-theme p-2 bg-transparent" value={mode} onChange={(e) => { const v = e.target.value as typeof mode; setMode(v); try { window.localStorage.setItem("fc-mode", v); } catch {} }}>
             <option value="words">Words</option>
             <option value="conversations">Conversations</option>
+            <option value="sentences">Sentences</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
@@ -225,7 +242,7 @@ export default function FlashcardsFetch() {
           </select>
         </div>
         
-        <span className="text-xs opacity-70">{mode === "words" ? filteredWords.length : filteredConversations.length} cards</span>
+        <span className="text-xs opacity-70">{mode === "words" ? filteredWords.length : (mode === "conversations" ? filteredConversations.length : sentences.length)} cards</span>
         <label className="ml-auto flex items-center gap-2 text-sm">
           <input type="checkbox" checked={listeningOnly} onChange={(e) => setListeningOnly(e.target.checked)} />
           Listening only
@@ -241,11 +258,18 @@ export default function FlashcardsFetch() {
           resumeKey={`words:${selectedCategoryId || "all"}`}
           listeningOnly={listeningOnly}
         />
-      ) : (
+      ) : mode === "conversations" ? (
         <FlashcardsClient
           words={filteredConversations as unknown as Word[]}
           mode="conversations"
           resumeKey={`conversations:${selectedCategoryId || "all"}`}
+          listeningOnly={listeningOnly}
+        />
+      ) : (
+        <FlashcardsClient
+          words={sentences as unknown as Word[]}
+          mode="sentences"
+          resumeKey={`sentences:${selectedCategoryId || "all"}`}
           listeningOnly={listeningOnly}
         />
       )}

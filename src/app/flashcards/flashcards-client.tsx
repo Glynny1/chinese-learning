@@ -136,7 +136,7 @@ function isDue(state: CardState | undefined): boolean {
   return new Date(state.dueAt).getTime() <= Date.now();
 }
 
-export default function FlashcardsClient({ words, mode = "words", resumeKey, listeningOnly = false }: { words: Word[]; mode?: "words" | "conversations"; resumeKey?: string; listeningOnly?: boolean }) {
+export default function FlashcardsClient({ words, mode = "words", resumeKey, listeningOnly = false }: { words: Word[]; mode?: "words" | "conversations" | "sentences"; resumeKey?: string; listeningOnly?: boolean }) {
   const [store, setStore] = useState<SrsStore>({ perCard: {}, daily: { date: todayKey(), newIntroduced: 0 } });
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -174,6 +174,15 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     if (mode === "conversations") {
       // Conversations should preserve provided order (already sorted upstream)
       return [...words];
+    }
+    if (mode === "sentences") {
+      // Sentences should be random; no SRS spacing
+      const a = [...words];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
     }
     const due: Word[] = [];
     const fresh: Word[] = [];
@@ -252,7 +261,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     throw lastErr instanceof Error ? lastErr : new Error("tts failed");
   }
 
-  // Persist index whenever it changes in conversations mode
+  // Persist index whenever it changes in conversations mode (sentences are random each time)
   useEffect(() => {
     try {
       if (resumeKey && typeof window !== "undefined" && mode === "conversations") {
@@ -360,7 +369,7 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
   function gradeCurrent(grade: Grade) {
     if (!current) return;
     // Removed server logging per request
-    if (mode === "conversations") {
+    if (mode !== "words") {
       // Linear progression: always move to the next card in order
       setReviewed((r) => r + 1);
       if (grade >= 2) setCorrect((c) => c + 1);
