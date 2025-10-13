@@ -39,10 +39,18 @@ export default function NavBarClient() {
           {loggedIn ? (
             <>
               {isOwner ? <span className="text-xs px-2 py-0.5 rounded-full bg-black/5">Admin</span> : null}
+              <a href="https://ko-fi.com/U7U21MR38H" target="_blank" rel="noopener noreferrer" className="inline-flex items-center" aria-label="Support me on Ko‑fi" title="Support me on Ko‑fi">
+                <img src="https://storage.ko-fi.com/cdn/kofi1.png?v=3" alt="Support me on Ko‑fi" height="36" className="h-9 w-auto" />
+              </a>
               <LogoutButton />
             </>
           ) : (
-            <LoginButton />
+            <>
+              <a href="https://ko-fi.com/U7U21MR38H" target="_blank" rel="noopener noreferrer" className="inline-flex items-center" aria-label="Support me on Ko‑fi" title="Support me on Ko‑fi">
+                <img src="https://storage.ko-fi.com/cdn/kofi1.png?v=3" alt="Support me on Ko‑fi" height="36" className="h-9 w-auto" />
+              </a>
+              <LoginButton />
+            </>
           )}
         </div>
       </div>
