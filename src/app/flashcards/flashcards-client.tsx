@@ -51,6 +51,11 @@ function saveStore(store: SrsStore): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
+// Treat literal "\n" text from the DB as real newlines for display
+function normalizeNewlines(s?: string | null): string {
+  return (s ?? "").replace(/\\n/g, "\n");
+}
+
 // Remote SRS sync helpers (logged-in users)
 type SrsRow = {
   word_id: string;
@@ -558,10 +563,10 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
           <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] [transform:rotateY(180deg)]">
             {!listeningOnly && (
               <>
-                <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-normal break-words max-w-[92%]">{current?.english}</div>
+                <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-pre-line break-words max-w-[92%]">{normalizeNewlines(current?.english)}</div>
                 {current?.description ? (
                   <div className="opacity-80 mt-3 max-w-md mx-auto whitespace-pre-line break-words text-[clamp(14px,3.5vw,20px)] leading-relaxed">
-                    {current.description}
+                    {normalizeNewlines(current.description)}
                   </div>
                 ) : null}
               </>
