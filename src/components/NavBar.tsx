@@ -18,7 +18,6 @@ export default async function NavBar() {
         <Link href="/words" className="hover:underline">Words</Link>
         <Link href="/categories" className="hover:underline">Categories</Link>
         <Link href="/flashcards" className="hover:underline">Flashcards</Link>
-        {isOwner ? <Link href="/import" className="hover:underline">Import</Link> : null}
       </div>
       <div className="flex items-center gap-3">
         {user ? (

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import HomeAdminLink from "@/components/HomeAdminLink";
 
 export default async function Home() {
   // Home is static; admin-only links are handled in the NavBar client component
@@ -11,7 +10,7 @@ export default async function Home() {
       <div className="mt-6 grid grid-cols-1 gap-3">
         <Link href="/words" className="border rounded p-4 hover:bg-black/5">View words</Link>
         <Link href="/flashcards" className="border rounded p-4 hover:bg-black/5">Start flashcards</Link>
-        <HomeAdminLink />
+        {/* Import removed */}
       </div>
     </div>
   );

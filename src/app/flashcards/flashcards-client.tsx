@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import { useSwipeable } from "react-swipeable";
 
 type Word = { id: string; hanzi: string; pinyin: string; english: string; description?: string | null; type?: string | null };
@@ -54,6 +54,101 @@ function saveStore(store: SrsStore): void {
 // Treat literal "\n" text from the DB as real newlines for display
 function normalizeNewlines(s?: string | null): string {
   return (s ?? "").replace(/\\n/g, "\n");
+}
+
+// Auto-fit text to a container by adjusting font size between [minPx, maxPx]
+function useFitText<C extends HTMLElement, T extends HTMLElement>(
+  containerRef: React.RefObject<C | null>,
+  textRef: React.RefObject<T | null>,
+  deps: unknown[],
+  { minPx, maxPx, fitHeight = true }: { minPx: number; maxPx: number; fitHeight?: boolean }
+) {
+  useLayoutEffect(() => {
+    const container = containerRef.current as unknown as HTMLElement | null;
+    const node = textRef.current as unknown as HTMLElement | null;
+    if (!container || !node) return;
+
+    let raf = 0;
+    const fit = () => {
+      // Binary search to find the largest font size that fits both width and height
+      let lo = minPx;
+      let hi = maxPx;
+      let best = lo;
+      const maxIterations = 10;
+      for (let i = 0; i < maxIterations; i++) {
+        const mid = Math.floor((lo + hi) / 2);
+        node.style.fontSize = `${mid}px`;
+        // Temporarily ensure normal weight for measuring
+        const fitsWidth = node.scrollWidth <= container.clientWidth;
+        const fitsHeight = fitHeight ? (node.scrollHeight <= container.clientHeight) : true;
+        if (fitsWidth && fitsHeight) {
+          best = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      node.style.fontSize = `${best}px`;
+    };
+
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit); });
+    ro.observe(container);
+    raf = requestAnimationFrame(fit);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+// Scale a content block to fit within a container (both width and height), maximizing size
+function useScaleToFit<C extends HTMLElement, T extends HTMLElement>(
+  containerRef: React.RefObject<C | null>,
+  contentRef: React.RefObject<T | null>,
+  deps: unknown[]
+) {
+  useLayoutEffect(() => {
+    const container = containerRef.current as unknown as HTMLElement | null;
+    const content = contentRef.current as unknown as HTMLElement | null;
+    if (!container || !content) return;
+    let raf = 0;
+    const fit = () => {
+      content.style.transform = "scale(1)";
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      const iw = content.scrollWidth;
+      const ih = content.scrollHeight;
+      if (iw === 0 || ih === 0 || cw === 0 || ch === 0) return;
+      // Leave a slight buffer so text doesn't touch the border
+      const marginFactor = 0.96; // ~2% padding on each side visually
+      const fitScale = Math.min(cw / iw, ch / ih) * marginFactor;
+      // Keep sizes within a comfortable range where possible to avoid jarring jumps
+      const preferredMin = 0.95; // allow slight downscale for long content
+      const preferredMax = 2.2; // allow more upscale so short content fills the card
+      let scale = fitScale;
+      if (fitScale > preferredMax) {
+        scale = preferredMax; // cap very large text
+      } else if (fitScale < preferredMin) {
+        // too small to fit in the preferred range; use the fit value to ensure no overflow
+        scale = fitScale;
+      }
+      content.style.transform = `scale(${scale})`;
+    };
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit); });
+    ro.observe(container);
+    raf = requestAnimationFrame(fit);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+function FitSingleLine({ text, minPx, maxPx, className = "" }: { text: string; minPx: number; maxPx: number; className?: string }) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const lineRef = useRef<HTMLDivElement | null>(null);
+  useFitText(wrapRef, lineRef, [text], { minPx, maxPx, fitHeight: false });
+  return (
+    <div ref={wrapRef} className="w-full overflow-hidden">
+      <div ref={lineRef} className={`whitespace-nowrap ${className}`}>{text}</div>
+    </div>
+  );
 }
 
 // Remote SRS sync helpers (logged-in users)
@@ -520,6 +615,16 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
     return <div className="opacity-70">No words available. Please select a different mode or category.</div>;
   }
 
+  // Refs for auto-fit
+  const frontCardRef = useRef<HTMLDivElement | null>(null);
+  const frontTextRef = useRef<HTMLDivElement | null>(null);
+  const backCardRef = useRef<HTMLDivElement | null>(null);
+  const backTextRef = useRef<HTMLDivElement | null>(null);
+
+  // Fit main front text (Hanzi) to available width (ignore height to allow one-line sizing)
+  useFitText(frontCardRef, frontTextRef, [current?.hanzi, listeningOnly, showAnswer, effectiveQueue.length, index], { minPx: 22, maxPx: 56, fitHeight: false });
+  // Consistent sizing for back-of-card text (use CSS clamp; no per-card fitting)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between text-sm">
@@ -537,14 +642,14 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
             className={`relative h-[320px] sm:h-[360px] md:h-[min(50vh,400px)] lg:h-[min(52vh,440px)] xl:h-[min(54vh,480px)] w-full transition-transform duration-500 [transform-style:preserve-3d] ${showAnswer ? "[transform:rotateY(180deg)]" : ""}`}
             onClick={() => setShowAnswer((s) => !s)}
           >
-          <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] overflow-hidden">
+          <div ref={frontCardRef} className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] overflow-hidden">
             <div className="h-6 mb-2">
               {mode === "conversations" && current?.type ? (
                 <div className="text-sm uppercase tracking-wide opacity-85 max-w-[96%] whitespace-nowrap">{current.type}</div>
               ) : null}
             </div>
-            <div className="font-semibold flex items-center gap-3 justify-center text-[clamp(24px,7vw,64px)] leading-snug whitespace-normal max-w-[92%]">
-              {!listeningOnly && <span className="break-words">{current?.hanzi}</span>}
+            <div ref={frontTextRef} className="font-semibold flex items-center gap-3 justify-center leading-snug whitespace-nowrap w-[96%]">
+              {!listeningOnly && <span className="break-words w-full">{current?.hanzi}</span>}
               <button
                 className="text-sm px-2 py-1 btn-ghost"
                 onClick={(e) => { e.stopPropagation(); if (speaking) { try { if (currentAudioRef.current) { currentAudioRef.current.pause(); currentAudioRef.current.currentTime = 0; } } catch {}; try { if (currentAudioUrlRef.current) { URL.revokeObjectURL(currentAudioUrlRef.current); currentAudioUrlRef.current = null; } } catch {}; try { window.speechSynthesis.cancel(); } catch {}; setSpeaking(false); } else { speakCurrent(); } }}
@@ -560,16 +665,22 @@ export default function FlashcardsClient({ words, mode = "words", resumeKey, lis
               </div>
             )}
           </div>
-          <div className="absolute inset-0 border rounded-lg p-8 sm:p-10 text-center cursor-pointer select-none flex flex-col items-center justify-center bg-background [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <div ref={backCardRef} className="absolute inset-0 border rounded-lg p-4 sm:p-6 md:p-8 text-center cursor-pointer select-none flex items-center justify-center bg-background [backface-visibility:hidden] [transform:rotateY(180deg)] overflow-hidden">
             {!listeningOnly && (
-              <>
-                <div className="text-[clamp(20px,5vw,36px)] leading-snug whitespace-pre-line break-words max-w-[92%]">{normalizeNewlines(current?.english)}</div>
+              <div className="w-full px-2 sm:px-4 max-w-[92%] mx-auto">
+                <div ref={backTextRef} className="font-semibold leading-tight text-[clamp(24px,5vw,40px)] break-words">
+                  {normalizeNewlines(current?.english)}
+                </div>
                 {current?.description ? (
-                  <div className="opacity-80 mt-3 max-w-md mx-auto whitespace-pre-line break-words text-[clamp(14px,3.5vw,20px)] leading-relaxed">
-                    {normalizeNewlines(current.description)}
+                  <div className="opacity-85 mt-3 leading-snug space-y-1">
+                    {normalizeNewlines(current.description)
+                      .split("\n")
+                      .map((line, i) => (
+                        <div key={i} className="text-[clamp(16px,3.6vw,22px)] break-words">{line}</div>
+                      ))}
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
           </div>
